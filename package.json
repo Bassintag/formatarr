@@ -19,7 +19,8 @@
     }
   },
   "scripts": {
-    "dev": "FORCE_COLOR=1 bun run --parallel --filter '*' dev",
+    "dev": "FORCE_COLOR=1 bun run --parallel --filter '!@formatarr/worker' dev",
+    "dev:worker": "bun run --filter @formatarr/worker dev",
     "build": "bun run --filter '*' build",
     "test": "bun test",
     "typecheck": "bun check --no-script",

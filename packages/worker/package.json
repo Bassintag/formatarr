@@ -2,6 +2,9 @@
   "name": "@formatarr/worker",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch --no-clear-screen src/index.ts"
+  },
   "dependencies": {
     "@formatarr/contract": "workspace:*",
     "@orpc/client": "catalog:",
