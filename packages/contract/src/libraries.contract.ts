@@ -14,7 +14,7 @@ export const LibrarySchema = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
   enabled: z.boolean(),
-  integrationIds: z.array(IntegrationIdSchema),
+  integrations: z.array(z.object({ id: IntegrationIdSchema })),
 });
 export type Library = z.infer<typeof LibrarySchema>;
 
