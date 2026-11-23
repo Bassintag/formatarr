@@ -2,10 +2,16 @@ import {
   type Action,
   type Condition,
   type File as FileEntity,
+  type FileId,
   FileStatusSchema,
+  type IntegrationId,
   IntegrationTypeSchema,
+  type JobId,
   JobStatusSchema,
+  type LibraryId,
+  type RuleId,
   type Worker,
+  type WorkerId,
   WorkerStatusSchema,
 } from "@formatarr/contract";
 import { sql } from "drizzle-orm";
@@ -24,14 +30,14 @@ function values<T extends string>(schema: { options: readonly T[] }) {
 }
 
 export const libraries = sqliteTable("libraries", {
-  id: integer().primaryKey({ autoIncrement: true }),
+  id: integer().primaryKey({ autoIncrement: true }).$type<LibraryId>(),
   name: text().notNull(),
   path: text().notNull(),
   enabled: integer({ mode: "boolean" }).notNull().default(true),
 });
 
 export const integrations = sqliteTable("integrations", {
-  id: integer().primaryKey({ autoIncrement: true }),
+  id: integer().primaryKey({ autoIncrement: true }).$type<IntegrationId>(),
   type: text({ enum: values(IntegrationTypeSchema) }).notNull(),
   name: text().notNull(),
   baseUrl: text("base_url").notNull(),
@@ -43,9 +49,11 @@ export const libraryIntegrations = sqliteTable(
   "library_integrations",
   {
     libraryId: integer("library_id")
+      .$type<LibraryId>()
       .notNull()
       .references(() => libraries.id, { onDelete: "cascade" }),
     integrationId: integer("integration_id")
+      .$type<IntegrationId>()
       .notNull()
       .references(() => integrations.id, { onDelete: "cascade" }),
   },
@@ -55,8 +63,9 @@ export const libraryIntegrations = sqliteTable(
 export const rules = sqliteTable(
   "rules",
   {
-    id: integer().primaryKey({ autoIncrement: true }),
+    id: integer().primaryKey({ autoIncrement: true }).$type<RuleId>(),
     libraryId: integer("library_id")
+      .$type<LibraryId>()
       .notNull()
       .references(() => libraries.id, { onDelete: "cascade" }),
     name: text().notNull(),
@@ -73,8 +82,9 @@ export const rules = sqliteTable(
 export const files = sqliteTable(
   "files",
   {
-    id: integer().primaryKey({ autoIncrement: true }),
+    id: integer().primaryKey({ autoIncrement: true }).$type<FileId>(),
     libraryId: integer("library_id")
+      .$type<LibraryId>()
       .notNull()
       .references(() => libraries.id, { onDelete: "cascade" }),
     path: text().notNull(),
@@ -94,7 +104,7 @@ export const files = sqliteTable(
 );
 
 export const workers = sqliteTable("workers", {
-  id: integer().primaryKey({ autoIncrement: true }),
+  id: integer().primaryKey({ autoIncrement: true }).$type<WorkerId>(),
   name: text().notNull(),
   tokenHash: text("token_hash").notNull(),
   status: text({ enum: values(WorkerStatusSchema) })
@@ -114,16 +124,20 @@ export const workers = sqliteTable("workers", {
 export const jobs = sqliteTable(
   "jobs",
   {
-    id: integer().primaryKey({ autoIncrement: true }),
+    id: integer().primaryKey({ autoIncrement: true }).$type<JobId>(),
     fileId: integer("file_id")
+      .$type<FileId>()
       .notNull()
       .references(() => files.id, { onDelete: "cascade" }),
     ruleId: integer("rule_id")
+      .$type<RuleId>()
       .notNull()
       .references(() => rules.id, { onDelete: "cascade" }),
-    workerId: integer("worker_id").references(() => workers.id, {
-      onDelete: "set null",
-    }),
+    workerId: integer("worker_id")
+      .$type<WorkerId>()
+      .references(() => workers.id, {
+        onDelete: "set null",
+      }),
     status: text({ enum: values(JobStatusSchema) })
       .notNull()
       .default("queued"),

@@ -29,6 +29,11 @@ export const relations = defineRelations(schema, (r) => ({
   },
   workers: {
     jobs: r.many.jobs(),
+    runningJobs: r.many.jobs({
+      from: r.workers.id,
+      to: r.jobs.workerId,
+      where: { status: "running" },
+    }),
   },
   jobs: {
     file: r.one.files({

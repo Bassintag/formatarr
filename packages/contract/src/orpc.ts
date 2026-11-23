@@ -2,7 +2,7 @@ import "@orpc/openapi/extensions/route";
 import { defineMeta, oc } from "@orpc/contract";
 
 export interface AuthMeta {
-  required: boolean;
+  kind: "user" | "worker" | null;
 }
 
 export const [authMeta, getAuthMeta] = defineMeta(
@@ -10,6 +10,7 @@ export const [authMeta, getAuthMeta] = defineMeta(
   (incoming: AuthMeta, current) => ({ ...current, ...incoming }),
 );
 
-export const publicMeta = authMeta({ required: false });
+export const publicMeta = authMeta({ kind: null });
+export const workerMeta = authMeta({ kind: "worker" });
 
-export const orpc = oc.meta(authMeta({ required: true }));
+export const orpc = oc.meta(authMeta({ kind: "user" }));
