@@ -113,7 +113,6 @@ describe("running jobs", () => {
         .values({
           libraryId: library.id,
           name: "r",
-          position: 0,
           conditions: [],
           actions: [{ type: "setContainer", container: "mkv" }],
         })
