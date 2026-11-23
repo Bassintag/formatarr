@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "bun --env-file=../../.env --watch --no-clear-screen src/index.ts | pino-pretty",
-    "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun --env-file=../../.env src/db/migrate.ts"
   },

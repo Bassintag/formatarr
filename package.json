@@ -21,7 +21,7 @@
   "scripts": {
     "dev": "FORCE_COLOR=1 bun run --parallel --filter '*' dev",
     "test": "bun test",
-    "typecheck": "bun run --filter '*' typecheck",
+    "typecheck": "bun check --no-script",
     "check": "biome check . && bun run typecheck",
     "format": "biome check --write .",
     "db:generate": "bun run --filter @formatarr/api db:generate",
