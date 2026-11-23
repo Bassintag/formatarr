@@ -5,6 +5,7 @@ import type { Context } from "@/context";
 import { files } from "@/db/schema";
 import { orThrow } from "@/lib/db";
 import { assertDirectory } from "@/libraries/library.lib";
+import { probeFiles } from "@/probe/probe.lib";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mkv",
@@ -23,7 +24,7 @@ const MEDIA_EXTENSIONS = new Set([
 
 const DELETE_CHUNK_SIZE = 500;
 
-type ScanContext = Pick<Context, "db" | "events">;
+type ScanContext = Pick<Context, "db" | "events" | "logger" | "env" | "probe">;
 
 export type ScanResult = { created: number; updated: number; deleted: number };
 
@@ -108,6 +109,8 @@ export async function scanLibrary(
   for (const { change, id } of changes) {
     await events.publish("event", { resource: "file", change, id });
   }
+
+  await probeFiles(context, [...created, ...updated]);
 
   return {
     created: created.length,

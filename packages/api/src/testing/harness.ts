@@ -25,12 +25,24 @@ export function createTestContext(
       API_PORT: 0,
       DATA_DIR: dataDir,
       DATABASE_URL: ":memory:",
+      FFPROBE_PATH: "ffprobe",
+      PROBE_CONCURRENCY: 4,
       LOG_LEVEL: "silent",
     },
     db,
     logger: createLogger("silent"),
     settings: createSettings(dataDir),
     events: new MemoryPublisher(),
+    probe: async () => ({
+      format: {
+        format_name: "matroska,webm",
+        duration: "10",
+        bit_rate: "1000",
+      },
+      streams: [
+        { codec_type: "video", codec_name: "h264", width: 1920, height: 1080 },
+      ],
+    }),
     request: new Request("http://localhost"),
     ...overrides,
   };
