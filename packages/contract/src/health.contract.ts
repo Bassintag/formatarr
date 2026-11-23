@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { orpc } from "./orpc";
+import { orpc, publicMeta } from "./orpc";
 
 export const HealthSchema = z.object({
   status: z.literal("ok"),
@@ -8,5 +8,8 @@ export const HealthSchema = z.object({
 export type Health = z.infer<typeof HealthSchema>;
 
 export const healthContract = orpc.router({
-  check: orpc.route({ method: "GET", path: "/health" }).output(HealthSchema),
+  check: orpc
+    .meta(publicMeta)
+    .route({ method: "GET", path: "/health" })
+    .output(HealthSchema),
 });

@@ -34,8 +34,23 @@ export function createTestContext(
   };
 }
 
-export function createTestCaller(overrides: Partial<TestContext> = {}) {
+export function createTestCaller(
+  overrides: Partial<TestContext> = {},
+  options: { authenticated?: boolean } = {},
+) {
+  const { authenticated = true } = options;
   const context = createTestContext(overrides);
-  const call = createRouterClient(router, { context });
+  const call = createRouterClient(router, {
+    context: async () => {
+      if (!authenticated || overrides.request) return context;
+      const { auth } = await context.settings.read();
+      return {
+        ...context,
+        request: new Request("http://localhost", {
+          headers: { "x-api-key": auth.apiKey },
+        }),
+      };
+    },
+  });
   return { call, context, db: context.db };
 }

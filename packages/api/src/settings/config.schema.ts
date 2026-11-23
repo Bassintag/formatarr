@@ -18,3 +18,5 @@ export const ConfigSchema = z.object({
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+export type ConfigUpdate = { auth?: Partial<Config["auth"]> };

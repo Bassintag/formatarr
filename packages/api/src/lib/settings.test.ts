@@ -38,7 +38,12 @@ test("parses an existing file and keeps its values", async () => {
   const settings = createSettings(dataDir);
 
   const result = await settings.read();
-  expect(result.auth).toEqual({ username: "admin", apiKey: "key" });
+  expect(result.auth).toEqual({
+    username: "admin",
+    passwordHash: "hash",
+    jwtSecret: "jwt",
+    apiKey: "key",
+  });
   expect(await Bun.file(configPath()).text()).toContain("jwtSecret: jwt");
 });
 
@@ -76,7 +81,12 @@ test("saves updates atomically and keeps untouched values", async () => {
   const settings = createSettings(dataDir);
 
   const result = await settings.update({ auth: { username: "root" } });
-  expect(result.auth).toEqual({ username: "root", apiKey: "key" });
+  expect(result.auth).toEqual({
+    username: "root",
+    passwordHash: "hash",
+    jwtSecret: "jwt",
+    apiKey: "key",
+  });
   expect(existsSync(`${configPath()}.tmp`)).toBe(false);
 
   const saved = await Bun.file(configPath()).text();

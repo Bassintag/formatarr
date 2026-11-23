@@ -8,6 +8,7 @@ export * from "./ids";
 export * from "./integrations.contract";
 export * from "./jobs.contract";
 export * from "./libraries.contract";
+export * from "./orpc";
 export * from "./rules.contract";
 export * from "./scans.contract";
 export * from "./settings.contract";
