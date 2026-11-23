@@ -19,6 +19,7 @@
         "@formatarr/contract": "workspace:*",
         "@orpc/openapi": "catalog:",
         "@orpc/pino": "catalog:",
+        "@orpc/publisher": "catalog:",
         "@orpc/server": "catalog:",
         "drizzle-orm": "1.0.0-rc.6",
         "es-toolkit": "^1.53.2",
@@ -81,6 +82,7 @@
     "@orpc/contract": "2.0.0-beta.53",
     "@orpc/openapi": "2.0.0-beta.53",
     "@orpc/pino": "2.0.0-beta.53",
+    "@orpc/publisher": "2.0.0-beta.53",
     "@orpc/server": "2.0.0-beta.53",
     "@orpc/tanstack-query": "2.0.0-beta.53",
     "@types/bun": "1.4.5",
@@ -235,6 +237,8 @@
     "@orpc/openapi": ["@orpc/openapi@2.0.0-beta.53", "", { "dependencies": { "@openapi-spec/downgrader": "~0.8.0", "@openapi-spec/router": "~0.8.0", "@openapi-spec/types": "~0.8.0", "@orpc/client": "2.0.0-beta.53", "@orpc/contract": "2.0.0-beta.53", "@orpc/json-schema": "2.0.0-beta.53", "@orpc/server": "2.0.0-beta.53", "@orpc/shared": "2.0.0-beta.53", "@standard-server/core": "~0.16.0", "@standard-server/fetch": "~0.16.0" }, "peerDependencies": { "@scalar/api-reference": ">=1.57.2", "@types/swagger-ui": ">=5.32.0", "swagger-ui": ">=5.32.6" }, "optionalPeers": ["@scalar/api-reference", "@types/swagger-ui", "swagger-ui"] }, "sha512-jreHQkTedxIjtz6jdT3qpyYT1WBJ3OWb8896zjpVcr9JO8frCdvGADV6ANre6vDFAv3eZbLpGBQw+8jBPn0GmA=="],
 
     "@orpc/pino": ["@orpc/pino@2.0.0-beta.53", "", { "dependencies": { "@orpc/client": "2.0.0-beta.53", "@orpc/server": "2.0.0-beta.53", "@orpc/shared": "2.0.0-beta.53", "@standard-server/core": "~0.16.0" }, "peerDependencies": { "pino": ">=10.1.0" } }, "sha512-9wWvOVJ1udUsTFH2dsc5PUiZoqpkHJ9KTNg8kQOhNUf5De/nqPmLIpUTOEK5zp1BYmVlsEDZVfEv0PHtgk8/qg=="],
+
+    "@orpc/publisher": ["@orpc/publisher@2.0.0-beta.53", "", { "dependencies": { "@orpc/client": "2.0.0-beta.53", "@orpc/shared": "2.0.0-beta.53", "@standard-server/core": "~0.16.0" }, "peerDependencies": { "@upstash/redis": ">=1.35.6", "redis": ">=6.0.0" }, "optionalPeers": ["@upstash/redis", "redis"] }, "sha512-yKpiPFfcoXwGSsWAs8Txo4SfBm0p4qX/PMnpQm2DNQFoUGRowPaXy+hAlKDPojkoQ5yNsvuJmlY3Ga+83OxwUw=="],
 
     "@orpc/server": ["@orpc/server@2.0.0-beta.53", "", { "dependencies": { "@orpc/client": "2.0.0-beta.53", "@orpc/contract": "2.0.0-beta.53", "@orpc/shared": "2.0.0-beta.53", "@standard-server/aws-lambda": "~0.16.0", "@standard-server/core": "~0.16.0", "@standard-server/fastify": "~0.16.0", "@standard-server/fetch": "~0.16.0", "@standard-server/node": "~0.16.0", "@standard-server/peer": "~0.16.0", "cookie": "^2.0.1" }, "peerDependencies": { "crossws": ">=0.3.4", "fastify": ">=5.6.1" }, "optionalPeers": ["crossws", "fastify"] }, "sha512-CZfbgrAYNvcpbF31iX0D65hB/GClmyYVKV0zKYhUMCnUcSDf/ldpmok1lwor8i3rP0VfLpOkppTDxN5dkcJ2Ag=="],
 

@@ -34,6 +34,11 @@ const create = orpc.workers.create.handler(async ({ context, input }) => {
       where: { id: created.id },
     }),
   );
+  await context.events.publish("event", {
+    resource: "worker",
+    change: "created",
+    id: worker.id,
+  });
   return { ...worker, token };
 });
 
@@ -56,6 +61,11 @@ const update = orpc.workers.update.handler(async ({ context, input }) => {
         .where(eq(workers.id, id))
         .returning({ id: workers.id }),
     );
+    await context.events.publish("event", {
+      resource: "worker",
+      change: "updated",
+      id,
+    });
   }
   return orThrow(
     context.db.query.workers.findFirst({
@@ -72,6 +82,11 @@ const remove = orpc.workers.remove.handler(async ({ context, input }) => {
       .where(eq(workers.id, input.id))
       .returning({ id: workers.id }),
   );
+  await context.events.publish("event", {
+    resource: "worker",
+    change: "deleted",
+    id: input.id,
+  });
 });
 
 const regenerateToken = orpc.workers.regenerateToken.handler(
@@ -84,6 +99,11 @@ const regenerateToken = orpc.workers.regenerateToken.handler(
         .where(eq(workers.id, input.id))
         .returning({ id: workers.id }),
     );
+    await context.events.publish("event", {
+      resource: "worker",
+      change: "updated",
+      id: input.id,
+    });
     return { token };
   },
 );

@@ -11,6 +11,7 @@ const handler = new OpenAPIHandler(router, {
 
 const server = Bun.serve({
   port: context.env.API_PORT,
+  idleTimeout: 0,
   async fetch(request) {
     const { matched, response } = await handler.handle(request, {
       context: { ...context, request },

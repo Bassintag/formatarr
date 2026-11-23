@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MemoryPublisher } from "@orpc/publisher/memory";
 import { createRouterClient } from "@orpc/server";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import type { Context } from "@/context";
@@ -29,6 +30,7 @@ export function createTestContext(
     db,
     logger: createLogger("silent"),
     settings: createSettings(dataDir),
+    events: new MemoryPublisher(),
     request: new Request("http://localhost"),
     ...overrides,
   };

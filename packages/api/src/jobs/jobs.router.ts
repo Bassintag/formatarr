@@ -57,6 +57,11 @@ const remove = orpc.jobs.remove.handler(async ({ context, input }) => {
       .where(eq(jobs.id, input.id))
       .returning({ id: jobs.id }),
   );
+  await context.events.publish("event", {
+    resource: "job",
+    change: "deleted",
+    id: input.id,
+  });
 });
 
 export const jobsRouter = orpc.jobs.router({

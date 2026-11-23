@@ -45,6 +45,11 @@ const update = orpc.files.update.handler(async ({ context, input }) => {
     context.db.query.files.findFirst({ columns: { id: true }, where: { id } }),
   );
   context.db.update(files).set({ ignored }).where(eq(files.id, id)).run();
+  await context.events.publish("event", {
+    resource: "file",
+    change: "updated",
+    id,
+  });
   return orThrow(
     context.db.query.files.findFirst({ ...fileOptions, where: { id } }),
   );
