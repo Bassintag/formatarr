@@ -1,4 +1,4 @@
-import z from "zod";
+import { z } from "zod";
 import { orpc } from "./orpc";
 
 export const SettingsSchema = z.object({
@@ -7,22 +7,19 @@ export const SettingsSchema = z.object({
     apiKey: z.string(),
   }),
 });
+export type Settings = z.infer<typeof SettingsSchema>;
 
 export const SettingsUpdateSchema = z.object({
   auth: SettingsSchema.shape.auth.partial(),
 });
-
-export type Settings = z.infer<typeof SettingsSchema>;
 export type SettingsUpdate = z.infer<typeof SettingsUpdateSchema>;
 
-const tags = ["settings"];
-
-export const settingsContract = orpc.router({
-  get: orpc
-    .route({ method: "GET", path: "/settings", tags })
-    .output(SettingsSchema),
-  update: orpc
-    .route({ method: "PATCH", path: "/settings", tags })
-    .input(SettingsUpdateSchema)
-    .output(SettingsSchema),
-});
+export const settingsContract = orpc
+  .route({ prefix: "/settings", tags: ["settings"] })
+  .router({
+    get: orpc.route({ method: "GET", path: "/" }).output(SettingsSchema),
+    update: orpc
+      .route({ method: "PATCH", path: "/" })
+      .input(SettingsUpdateSchema)
+      .output(SettingsSchema),
+  });

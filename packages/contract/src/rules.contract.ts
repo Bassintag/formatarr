@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { PaginationSchema, pageOf } from "./common.contract";
+import {
+  IdParamsSchema,
+  PageSchema,
+  PaginationSchema,
+  UpdateSchema,
+  VoidSchema,
+} from "./common.contract";
 import { LibraryIdSchema, RuleIdSchema } from "./ids";
 import { orpc } from "./orpc";
 
@@ -13,6 +19,7 @@ export const ConditionFieldSchema = z.enum([
   "audioLanguages",
   "size",
 ]);
+export type ConditionField = z.infer<typeof ConditionFieldSchema>;
 
 export const ConditionOperatorSchema = z.enum([
   "eq",
@@ -22,13 +29,15 @@ export const ConditionOperatorSchema = z.enum([
   "in",
   "notIn",
 ]);
+export type ConditionOperator = z.infer<typeof ConditionOperatorSchema>;
 
-const scalar = z.union([z.string(), z.number()]);
+export const ScalarSchema = z.union([z.string(), z.number()]);
+export type Scalar = z.infer<typeof ScalarSchema>;
 
 export const ConditionSchema = z.object({
   field: ConditionFieldSchema,
   operator: ConditionOperatorSchema,
-  value: z.union([scalar, z.array(scalar)]),
+  value: z.union([ScalarSchema, z.array(ScalarSchema)]),
 });
 export type Condition = z.infer<typeof ConditionSchema>;
 
@@ -66,32 +75,41 @@ export const RuleSchema = z.object({
 });
 export type Rule = z.infer<typeof RuleSchema>;
 
-const RuleInputSchema = RuleSchema.omit({ id: true });
-const tags = ["rules"];
-
-export const rulesContract = orpc.router({
-  list: orpc
-    .route({ method: "GET", path: "/rules", tags })
-    .input(PaginationSchema.extend({ libraryId: LibraryIdSchema.optional() }))
-    .output(pageOf(RuleSchema)),
-  create: orpc
-    .route({ method: "POST", path: "/rules", tags })
-    .input(RuleInputSchema)
-    .output(RuleSchema),
-  get: orpc
-    .route({ method: "GET", path: "/rules/{id}", tags })
-    .input(z.object({ id: RuleIdSchema }))
-    .output(RuleSchema),
-  update: orpc
-    .route({ method: "PATCH", path: "/rules/{id}", tags })
-    .input(
-      RuleInputSchema.omit({ libraryId: true })
-        .partial()
-        .extend({ id: RuleIdSchema }),
-    )
-    .output(RuleSchema),
-  remove: orpc
-    .route({ method: "DELETE", path: "/rules/{id}", tags })
-    .input(z.object({ id: RuleIdSchema }))
-    .output(z.void()),
+export const ListRulesInputSchema = PaginationSchema.extend({
+  libraryId: LibraryIdSchema.optional(),
 });
+export type ListRulesInput = z.infer<typeof ListRulesInputSchema>;
+
+export const CreateRuleInputSchema = RuleSchema.omit({ id: true });
+export type CreateRuleInput = z.infer<typeof CreateRuleInputSchema>;
+
+export const UpdateRuleInputSchema = UpdateSchema(
+  CreateRuleInputSchema.omit({ libraryId: true }),
+  RuleIdSchema,
+);
+export type UpdateRuleInput = z.infer<typeof UpdateRuleInputSchema>;
+
+export const rulesContract = orpc
+  .route({ prefix: "/rules", tags: ["rules"] })
+  .router({
+    list: orpc
+      .route({ method: "GET", path: "/" })
+      .input(ListRulesInputSchema)
+      .output(PageSchema(RuleSchema)),
+    create: orpc
+      .route({ method: "POST", path: "/" })
+      .input(CreateRuleInputSchema)
+      .output(RuleSchema),
+    get: orpc
+      .route({ method: "GET", path: "/{id}" })
+      .input(IdParamsSchema(RuleIdSchema))
+      .output(RuleSchema),
+    update: orpc
+      .route({ method: "PATCH", path: "/{id}" })
+      .input(UpdateRuleInputSchema)
+      .output(RuleSchema),
+    remove: orpc
+      .route({ method: "DELETE", path: "/{id}" })
+      .input(IdParamsSchema(RuleIdSchema))
+      .output(VoidSchema),
+  });

@@ -1,10 +1,10 @@
 import {
   type Action,
   type Condition,
+  type File as FileEntity,
   FileStatusSchema,
   IntegrationTypeSchema,
   JobStatusSchema,
-  type MediaInfo,
   type Worker,
   WorkerStatusSchema,
 } from "@formatarr/contract";
@@ -79,7 +79,9 @@ export const files = sqliteTable(
       .references(() => libraries.id, { onDelete: "cascade" }),
     path: text().notNull(),
     size: integer().notNull(),
-    mediaInfo: text("media_info", { mode: "json" }).$type<MediaInfo>(),
+    mediaInfo: text("media_info", { mode: "json" }).$type<
+      FileEntity["mediaInfo"]
+    >(),
     status: text({ enum: values(FileStatusSchema) })
       .notNull()
       .default("pending"),

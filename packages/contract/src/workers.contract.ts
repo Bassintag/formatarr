@@ -1,21 +1,29 @@
 import { eventIterator } from "@orpc/contract";
 import { z } from "zod";
-import { PaginationSchema, pageOf } from "./common.contract";
+import {
+  IdParamsSchema,
+  PageSchema,
+  PaginationSchema,
+  VoidSchema,
+} from "./common.contract";
 import { JobIdSchema, WorkerIdSchema } from "./ids";
 import { JobOfferSchema } from "./jobs.contract";
 import { orpc } from "./orpc";
 
 export const WorkerStatusSchema = z.enum(["online", "busy", "offline"]);
+export type WorkerStatus = z.infer<typeof WorkerStatusSchema>;
 
 export const WorkerCapabilitiesSchema = z.object({
   ffmpegVersion: z.string(),
   hwaccels: z.array(z.string()),
 });
+export type WorkerCapabilities = z.infer<typeof WorkerCapabilitiesSchema>;
 
 export const PathMappingSchema = z.object({
   from: z.string(),
   to: z.string(),
 });
+export type PathMapping = z.infer<typeof PathMappingSchema>;
 
 export const WorkerSchema = z.object({
   id: WorkerIdSchema,
@@ -29,43 +37,45 @@ export const WorkerSchema = z.object({
 });
 export type Worker = z.infer<typeof WorkerSchema>;
 
-const tags = ["workers"];
-
-export const workersContract = orpc.router({
-  list: orpc
-    .route({ method: "GET", path: "/workers", tags })
-    .input(PaginationSchema)
-    .output(pageOf(WorkerSchema)),
-  create: orpc
-    .route({ method: "POST", path: "/workers", tags })
-    .input(
-      z.object({
-        name: z.string().min(1),
-        capabilities: WorkerCapabilitiesSchema,
-      }),
-    )
-    .output(WorkerSchema),
-  get: orpc
-    .route({ method: "GET", path: "/workers/{id}", tags })
-    .input(z.object({ id: WorkerIdSchema }))
-    .output(WorkerSchema),
-  update: orpc
-    .route({ method: "PATCH", path: "/workers/{id}", tags })
-    .input(
-      z.object({
-        id: WorkerIdSchema,
-        name: WorkerSchema.shape.name.optional(),
-        enabled: z.boolean().optional(),
-        pathMappings: z.array(PathMappingSchema).optional(),
-      }),
-    )
-    .output(WorkerSchema),
-  remove: orpc
-    .route({ method: "DELETE", path: "/workers/{id}", tags })
-    .input(z.object({ id: WorkerIdSchema }))
-    .output(z.void()),
-  jobs: orpc
-    .route({ method: "GET", path: "/workers/{id}/jobs", tags })
-    .input(z.object({ id: WorkerIdSchema }))
-    .output(eventIterator(JobOfferSchema)),
+export const CreateWorkerInputSchema = z.object({
+  name: z.string().min(1),
+  capabilities: WorkerCapabilitiesSchema,
 });
+export type CreateWorkerInput = z.infer<typeof CreateWorkerInputSchema>;
+
+export const UpdateWorkerInputSchema = z.object({
+  id: WorkerIdSchema,
+  name: WorkerSchema.shape.name.optional(),
+  enabled: z.boolean().optional(),
+  pathMappings: z.array(PathMappingSchema).optional(),
+});
+export type UpdateWorkerInput = z.infer<typeof UpdateWorkerInputSchema>;
+
+export const workersContract = orpc
+  .route({ prefix: "/workers", tags: ["workers"] })
+  .router({
+    list: orpc
+      .route({ method: "GET", path: "/" })
+      .input(PaginationSchema)
+      .output(PageSchema(WorkerSchema)),
+    create: orpc
+      .route({ method: "POST", path: "/" })
+      .input(CreateWorkerInputSchema)
+      .output(WorkerSchema),
+    get: orpc
+      .route({ method: "GET", path: "/{id}" })
+      .input(IdParamsSchema(WorkerIdSchema))
+      .output(WorkerSchema),
+    update: orpc
+      .route({ method: "PATCH", path: "/{id}" })
+      .input(UpdateWorkerInputSchema)
+      .output(WorkerSchema),
+    remove: orpc
+      .route({ method: "DELETE", path: "/{id}" })
+      .input(IdParamsSchema(WorkerIdSchema))
+      .output(VoidSchema),
+    jobs: orpc
+      .route({ method: "GET", path: "/{id}/jobs" })
+      .input(IdParamsSchema(WorkerIdSchema))
+      .output(eventIterator(JobOfferSchema)),
+  });

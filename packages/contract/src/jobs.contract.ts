@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { PaginationSchema, pageOf } from "./common.contract";
+import {
+  IdParamsSchema,
+  PageSchema,
+  PaginationSchema,
+  VoidSchema,
+} from "./common.contract";
 import { FileIdSchema, JobIdSchema, RuleIdSchema, WorkerIdSchema } from "./ids";
 import { orpc } from "./orpc";
 import { ActionSchema } from "./rules.contract";
@@ -34,41 +39,46 @@ export const JobOfferSchema = z.object({
 });
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 
-const tags = ["jobs"];
-
-export const jobsContract = orpc.router({
-  list: orpc
-    .route({ method: "GET", path: "/jobs", tags })
-    .input(
-      PaginationSchema.extend({
-        status: JobStatusSchema.optional(),
-        workerId: WorkerIdSchema.optional(),
-        fileId: FileIdSchema.optional(),
-      }),
-    )
-    .output(pageOf(JobSchema)),
-  create: orpc
-    .route({ method: "POST", path: "/jobs", tags })
-    .input(z.object({ fileId: FileIdSchema }))
-    .output(JobSchema),
-  get: orpc
-    .route({ method: "GET", path: "/jobs/{id}", tags })
-    .input(z.object({ id: JobIdSchema }))
-    .output(JobSchema),
-  update: orpc
-    .route({ method: "PATCH", path: "/jobs/{id}", tags })
-    .input(
-      z.object({
-        id: JobIdSchema,
-        status: JobStatusSchema.optional(),
-        progress: JobSchema.shape.progress.optional(),
-        error: z.string().optional(),
-        workerId: WorkerIdSchema.optional(),
-      }),
-    )
-    .output(JobSchema),
-  remove: orpc
-    .route({ method: "DELETE", path: "/jobs/{id}", tags })
-    .input(z.object({ id: JobIdSchema }))
-    .output(z.void()),
+export const ListJobsInputSchema = PaginationSchema.extend({
+  status: JobStatusSchema.optional(),
+  workerId: WorkerIdSchema.optional(),
+  fileId: FileIdSchema.optional(),
 });
+export type ListJobsInput = z.infer<typeof ListJobsInputSchema>;
+
+export const CreateJobInputSchema = z.object({ fileId: FileIdSchema });
+export type CreateJobInput = z.infer<typeof CreateJobInputSchema>;
+
+export const UpdateJobInputSchema = z.object({
+  id: JobIdSchema,
+  status: JobStatusSchema.optional(),
+  progress: JobSchema.shape.progress.optional(),
+  error: z.string().optional(),
+  workerId: WorkerIdSchema.optional(),
+});
+export type UpdateJobInput = z.infer<typeof UpdateJobInputSchema>;
+
+export const jobsContract = orpc
+  .route({ prefix: "/jobs", tags: ["jobs"] })
+  .router({
+    list: orpc
+      .route({ method: "GET", path: "/" })
+      .input(ListJobsInputSchema)
+      .output(PageSchema(JobSchema)),
+    create: orpc
+      .route({ method: "POST", path: "/" })
+      .input(CreateJobInputSchema)
+      .output(JobSchema),
+    get: orpc
+      .route({ method: "GET", path: "/{id}" })
+      .input(IdParamsSchema(JobIdSchema))
+      .output(JobSchema),
+    update: orpc
+      .route({ method: "PATCH", path: "/{id}" })
+      .input(UpdateJobInputSchema)
+      .output(JobSchema),
+    remove: orpc
+      .route({ method: "DELETE", path: "/{id}" })
+      .input(IdParamsSchema(JobIdSchema))
+      .output(VoidSchema),
+  });
