@@ -12,18 +12,28 @@ import { orpc } from "./orpc";
 export const IntegrationTypeSchema = z.enum(["radarr", "sonarr"]);
 export type IntegrationType = z.infer<typeof IntegrationTypeSchema>;
 
+const MASK = "••••";
+const VISIBLE_SUFFIX = 4;
+
+function maskApiKey(apiKey: string) {
+  if (apiKey.length <= VISIBLE_SUFFIX * 2) return MASK;
+  return `${MASK}${apiKey.slice(-VISIBLE_SUFFIX)}`;
+}
+
 export const IntegrationSchema = z.object({
   id: IntegrationIdSchema,
   type: IntegrationTypeSchema,
-  name: z.string(),
+  name: z.string().min(1),
   baseUrl: z.url(),
-  apiKey: z.string(),
+  apiKey: z.string().transform(maskApiKey),
   enabled: z.boolean(),
 });
 export type Integration = z.infer<typeof IntegrationSchema>;
 
 export const CreateIntegrationInputSchema = IntegrationSchema.omit({
   id: true,
+}).extend({
+  apiKey: z.string().min(1),
 });
 export type CreateIntegrationInput = z.infer<
   typeof CreateIntegrationInputSchema
