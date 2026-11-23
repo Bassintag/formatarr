@@ -20,6 +20,7 @@
   },
   "scripts": {
     "dev": "FORCE_COLOR=1 bun run --parallel --filter '*' dev",
+    "build": "bun run --filter '*' build",
     "test": "bun test",
     "typecheck": "bun check --no-script",
     "check": "biome check . && bun run typecheck",
