@@ -21,6 +21,8 @@ const MEDIA_EXTENSIONS = new Set([
   ".mpeg",
 ]);
 
+const DELETE_CHUNK_SIZE = 500;
+
 type ScanContext = Pick<Context, "db" | "events">;
 
 export type ScanResult = { created: number; updated: number; deleted: number };
@@ -76,9 +78,14 @@ export async function scanLibrary(
       }
     }
 
-    if (deleted.length > 0) {
+    for (let start = 0; start < deleted.length; start += DELETE_CHUNK_SIZE) {
       tx.delete(files)
-        .where(and(eq(files.libraryId, libraryId), inArray(files.id, deleted)))
+        .where(
+          and(
+            eq(files.libraryId, libraryId),
+            inArray(files.id, deleted.slice(start, start + DELETE_CHUNK_SIZE)),
+          ),
+        )
         .run();
     }
 

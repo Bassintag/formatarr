@@ -104,4 +104,24 @@ describe("scanLibrary", () => {
     const { context } = await setup();
     expect(scanLibrary(context, 999 as never)).rejects.toThrow();
   });
+
+  test("handles removing more files than sqlite variable limit", async () => {
+    const { context, libraryId, rows } = await setup();
+    const total = 50_000;
+    for (let start = 0; start < total; start += 1000) {
+      context.db
+        .insert(files)
+        .values(
+          Array.from({ length: 1000 }, (_, i) => ({
+            libraryId,
+            path: `/gone/${start + i}.mkv`,
+            size: 1,
+          })),
+        )
+        .run();
+    }
+    const result = await scanLibrary(context, libraryId);
+    expect(result).toEqual({ created: 2, updated: 0, deleted: total });
+    expect(rows()).toHaveLength(2);
+  });
 });
