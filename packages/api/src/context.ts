@@ -4,6 +4,7 @@ import { createDb } from "@/lib/db";
 import { createEnv } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { createSettings } from "@/lib/settings";
+import { createProbeRunner } from "@/probe/probe.lib";
 
 export function createContext() {
   const env = createEnv();
@@ -14,6 +15,7 @@ export function createContext() {
     logger: createLogger(env.LOG_LEVEL),
     settings: createSettings(env.DATA_DIR),
     events: new MemoryPublisher<{ event: AppEvent }>(),
+    probe: createProbeRunner(env.FFPROBE_PATH),
   };
 }
 

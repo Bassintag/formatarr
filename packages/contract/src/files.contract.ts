@@ -16,33 +16,34 @@ export const FileStatusSchema = z.enum([
 ]);
 export type FileStatus = z.infer<typeof FileStatusSchema>;
 
+export const MediaInfoSchema = z.object({
+  container: z.string(),
+  durationSeconds: z.number().nonnegative(),
+  bitrate: z.number().nonnegative(),
+  video: z.object({
+    codec: z.string(),
+    width: z.number().int(),
+    height: z.number().int(),
+  }),
+  audio: z.array(
+    z.object({
+      codec: z.string(),
+      language: z.string().nullable(),
+      channels: z.number().int(),
+    }),
+  ),
+  subtitles: z.array(
+    z.object({ codec: z.string(), language: z.string().nullable() }),
+  ),
+});
+export type MediaInfo = z.infer<typeof MediaInfoSchema>;
+
 export const FileSchema = z.object({
   id: FileIdSchema,
   libraryId: LibraryIdSchema,
   path: z.string(),
   size: z.number().int().nonnegative(),
-  mediaInfo: z
-    .object({
-      container: z.string(),
-      durationSeconds: z.number().nonnegative(),
-      bitrate: z.number().nonnegative(),
-      video: z.object({
-        codec: z.string(),
-        width: z.number().int(),
-        height: z.number().int(),
-      }),
-      audio: z.array(
-        z.object({
-          codec: z.string(),
-          language: z.string().nullable(),
-          channels: z.number().int(),
-        }),
-      ),
-      subtitles: z.array(
-        z.object({ codec: z.string(), language: z.string().nullable() }),
-      ),
-    })
-    .nullable(),
+  mediaInfo: MediaInfoSchema.nullable(),
   status: FileStatusSchema,
   ignored: z.boolean(),
 });
