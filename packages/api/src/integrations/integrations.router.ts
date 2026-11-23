@@ -1,29 +1,61 @@
-import { ORPCError } from "@orpc/server";
+import { count, eq } from "drizzle-orm";
+import { integrations } from "@/db/schema";
+import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
+import { integrationOptions } from "./integration.options";
 
-const list = orpc.integrations.list.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
+const list = orpc.integrations.list.handler(({ context, input }) =>
+  toPage(
+    context.db.query.integrations.findMany({
+      ...integrationOptions,
+      ...paginationOption(input),
+    }),
+    context.db.select({ total: count() }).from(integrations),
+  ),
+);
+
+const create = orpc.integrations.create.handler(({ context, input }) =>
+  firstOrThrow(context.db.insert(integrations).values(input).returning()),
+);
+
+const get = orpc.integrations.get.handler(({ context, input }) =>
+  orThrow(
+    context.db.query.integrations.findFirst({
+      ...integrationOptions,
+      where: { id: input.id },
+    }),
+  ),
+);
+
+const update = orpc.integrations.update.handler(async ({ context, input }) => {
+  const { id, ...changes } = input;
+  await orThrow(
+    context.db.query.integrations.findFirst({
+      columns: { id: true },
+      where: { id },
+    }),
+  );
+  if (Object.values(changes).some((value) => value !== undefined)) {
+    await context.db
+      .update(integrations)
+      .set(changes)
+      .where(eq(integrations.id, id));
+  }
+  return orThrow(
+    context.db.query.integrations.findFirst({
+      ...integrationOptions,
+      where: { id },
+    }),
+  );
 });
 
-const create = orpc.integrations.create.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
-});
-
-const get = orpc.integrations.get.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
-});
-
-const update = orpc.integrations.update.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
-});
-
-const remove = orpc.integrations.remove.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
+const remove = orpc.integrations.remove.handler(async ({ context, input }) => {
+  await firstOrThrow(
+    context.db
+      .delete(integrations)
+      .where(eq(integrations.id, input.id))
+      .returning({ id: integrations.id }),
+  );
 });
 
 export const integrationsRouter = orpc.integrations.router({
