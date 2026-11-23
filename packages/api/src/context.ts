@@ -1,3 +1,5 @@
+import type { AppEvent } from "@formatarr/contract";
+import { MemoryPublisher } from "@orpc/publisher/memory";
 import { createDb } from "@/lib/db";
 import { createEnv } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
@@ -11,6 +13,7 @@ export function createContext() {
     db: createDb(env.DATABASE_URL),
     logger: createLogger(env.LOG_LEVEL),
     settings: createSettings(env.DATA_DIR),
+    events: new MemoryPublisher<{ event: AppEvent }>(),
   };
 }
 

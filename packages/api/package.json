@@ -11,6 +11,7 @@
     "@formatarr/contract": "workspace:*",
     "@orpc/openapi": "catalog:",
     "@orpc/pino": "catalog:",
+    "@orpc/publisher": "catalog:",
     "@orpc/server": "catalog:",
     "drizzle-orm": "1.0.0-rc.6",
     "es-toolkit": "^1.53.2",
