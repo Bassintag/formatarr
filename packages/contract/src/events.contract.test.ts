@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
-import { EventSchema } from "./events.contract";
+import { AppEventSchema } from "./events.contract";
 
-test("EventSchema parses every resource", () => {
+test("AppEventSchema parses every resource", () => {
   for (const resource of ["job", "file", "worker"]) {
     const event = { resource, change: "updated", id: 1 };
-    expect(EventSchema.safeParse(event).success).toBe(true);
+    expect(AppEventSchema.safeParse(event).success).toBe(true);
   }
 });
 
-test("EventSchema rejects an unknown resource", () => {
+test("AppEventSchema rejects an unknown resource", () => {
   const event = { resource: "library", change: "updated", id: 1 };
-  expect(EventSchema.safeParse(event).success).toBe(false);
+  expect(AppEventSchema.safeParse(event).success).toBe(false);
 });
