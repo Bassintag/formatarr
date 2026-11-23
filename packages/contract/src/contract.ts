@@ -9,6 +9,7 @@ import { librariesContract } from "./libraries.contract";
 import { orpc } from "./orpc";
 import { rulesContract } from "./rules.contract";
 import { scansContract } from "./scans.contract";
+import { settingsContract } from "./settings.contract";
 import { workersContract } from "./workers.contract";
 
 export const contract = orpc.router({
@@ -22,6 +23,7 @@ export const contract = orpc.router({
   workers: workersContract,
   integrations: integrationsContract,
   events: eventsContract,
+  settings: settingsContract,
 });
 
 export type ApiClient = ContractRouterClient<typeof contract>;

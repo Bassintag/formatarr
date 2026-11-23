@@ -8,6 +8,7 @@ import { orpc } from "./lib/orpc";
 import { librariesRouter } from "./libraries/libraries.router";
 import { rulesRouter } from "./rules/rules.router";
 import { scansRouter } from "./scans/scans.router";
+import { settingsRouter } from "./settings/settings.router";
 import { workersRouter } from "./workers/workers.router";
 
 export const router = orpc.router({
@@ -21,4 +22,5 @@ export const router = orpc.router({
   rules: rulesRouter,
   scans: scansRouter,
   workers: workersRouter,
+  settings: settingsRouter,
 });

@@ -10,4 +10,5 @@ export * from "./jobs.contract";
 export * from "./libraries.contract";
 export * from "./rules.contract";
 export * from "./scans.contract";
+export * from "./settings.contract";
 export * from "./workers.contract";
