@@ -2,9 +2,6 @@
   "name": "@formatarr/worker",
   "private": true,
   "type": "module",
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
   "dependencies": {
     "@formatarr/contract": "workspace:*",
     "@orpc/client": "catalog:",
