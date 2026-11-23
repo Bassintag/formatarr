@@ -12,12 +12,12 @@
     "@orpc/openapi": "catalog:",
     "@orpc/pino": "catalog:",
     "@orpc/server": "catalog:",
-    "drizzle-orm": "0.45.4",
+    "drizzle-orm": "1.0.0-rc.6",
     "pino": "^10.4.0",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "drizzle-kit": "0.31.11",
+    "drizzle-kit": "1.0.0-rc.6",
     "pino-pretty": "^13.2.0"
   }
 }
