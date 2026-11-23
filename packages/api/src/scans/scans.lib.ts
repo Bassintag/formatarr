@@ -1,0 +1,110 @@
+import { extname } from "node:path";
+import type { FileId, LibraryId } from "@formatarr/contract";
+import { and, eq, inArray } from "drizzle-orm";
+import type { Context } from "@/context";
+import { files } from "@/db/schema";
+import { orThrow } from "@/lib/db";
+import { assertDirectory } from "@/libraries/library.lib";
+
+const MEDIA_EXTENSIONS = new Set([
+  ".mkv",
+  ".mp4",
+  ".m4v",
+  ".avi",
+  ".mov",
+  ".wmv",
+  ".flv",
+  ".webm",
+  ".ts",
+  ".m2ts",
+  ".mpg",
+  ".mpeg",
+]);
+
+type ScanContext = Pick<Context, "db" | "events">;
+
+export type ScanResult = { created: number; updated: number; deleted: number };
+
+async function walkMedia(root: string) {
+  const found = new Map<string, number>();
+  const glob = new Bun.Glob("**/*");
+  for await (const path of glob.scan({
+    cwd: root,
+    absolute: true,
+    onlyFiles: true,
+  })) {
+    if (!MEDIA_EXTENSIONS.has(extname(path).toLowerCase())) continue;
+    found.set(path, Bun.file(path).size);
+  }
+  return found;
+}
+
+export async function scanLibrary(
+  context: ScanContext,
+  libraryId: LibraryId,
+): Promise<ScanResult> {
+  const { db, events } = context;
+  const library = await orThrow(
+    db.query.libraries.findFirst({ where: { id: libraryId } }),
+  );
+  await assertDirectory(library.path);
+  const onDisk = await walkMedia(library.path);
+
+  const created: FileId[] = [];
+  const updated: FileId[] = [];
+  const deleted: FileId[] = [];
+
+  db.transaction((tx) => {
+    const existing = tx
+      .select({ id: files.id, path: files.path, size: files.size })
+      .from(files)
+      .where(eq(files.libraryId, libraryId))
+      .all();
+    const known = new Set<string>();
+
+    for (const row of existing) {
+      known.add(row.path);
+      const size = onDisk.get(row.path);
+      if (size === undefined) {
+        deleted.push(row.id);
+      } else if (size !== row.size) {
+        tx.update(files)
+          .set({ size, status: "pending", mediaInfo: null })
+          .where(eq(files.id, row.id))
+          .run();
+        updated.push(row.id);
+      }
+    }
+
+    if (deleted.length > 0) {
+      tx.delete(files)
+        .where(and(eq(files.libraryId, libraryId), inArray(files.id, deleted)))
+        .run();
+    }
+
+    for (const [path, size] of onDisk) {
+      if (known.has(path)) continue;
+      const row = tx
+        .insert(files)
+        .values({ libraryId, path, size })
+        .returning({ id: files.id })
+        .get();
+      created.push(row.id);
+    }
+  });
+
+  const changes = [
+    ...created.map((id) => ({ change: "created" as const, id })),
+    ...updated.map((id) => ({ change: "updated" as const, id })),
+    ...deleted.map((id) => ({ change: "deleted" as const, id })),
+  ];
+  for (const { change, id } of changes) {
+    await events.publish("event", { resource: "file", change, id });
+  }
+
+  return {
+    created: created.length,
+    updated: updated.length,
+    deleted: deleted.length,
+  };
+}
