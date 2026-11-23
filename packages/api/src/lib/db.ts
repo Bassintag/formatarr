@@ -15,6 +15,10 @@ export function createDb(databaseUrl: string) {
   return drizzle({ client, relations });
 }
 
+export type Tx = Parameters<
+  Parameters<ReturnType<typeof createDb>["transaction"]>[0]
+>[0];
+
 export function paginationOption(pagination: Pagination) {
   return {
     offset: pagination.page * pagination.pageSize,
