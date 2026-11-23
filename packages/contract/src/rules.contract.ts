@@ -34,11 +34,24 @@ export type ConditionOperator = z.infer<typeof ConditionOperatorSchema>;
 export const ScalarSchema = z.union([z.string(), z.number()]);
 export type Scalar = z.infer<typeof ScalarSchema>;
 
-export const ConditionSchema = z.object({
-  field: ConditionFieldSchema,
-  operator: ConditionOperatorSchema,
-  value: z.union([ScalarSchema, z.array(ScalarSchema)]),
-});
+export const ConditionSchema = z
+  .object({
+    field: ConditionFieldSchema,
+    operator: ConditionOperatorSchema,
+    value: z.union([ScalarSchema, z.array(ScalarSchema)]),
+  })
+  .refine(
+    ({ operator, value }) => {
+      if (operator === "in" || operator === "notIn") {
+        return Array.isArray(value) && value.length > 0;
+      }
+      if (operator === "gt" || operator === "lt") {
+        return typeof value === "number";
+      }
+      return !Array.isArray(value);
+    },
+    { message: "Value does not match the operator" },
+  );
 export type Condition = z.infer<typeof ConditionSchema>;
 
 export const ActionSchema = z.discriminatedUnion("type", [
@@ -69,7 +82,6 @@ export const RuleSchema = z.object({
   libraryId: LibraryIdSchema,
   name: z.string().min(1),
   enabled: z.boolean(),
-  position: z.number().int().nonnegative(),
   conditions: z.array(ConditionSchema),
   actions: z.array(ActionSchema).min(1),
 });

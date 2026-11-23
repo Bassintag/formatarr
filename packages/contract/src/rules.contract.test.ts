@@ -6,7 +6,6 @@ const rule = {
   libraryId: 1,
   name: "x265",
   enabled: true,
-  position: 0,
   conditions: [{ field: "videoCodec", operator: "neq", value: "hevc" }],
   actions: [{ type: "transcodeVideo", codec: "hevc", crf: 23 }],
 };
@@ -28,4 +27,33 @@ test("ActionSchema rejects an action missing its parameters", () => {
   expect(ActionSchema.safeParse({ type: "transcodeVideo" }).success).toBe(
     false,
   );
+});
+
+test("ConditionSchema requires an array for in and notIn", () => {
+  const field = "audioLanguages";
+  expect(
+    ConditionSchema.safeParse({ field, operator: "in", value: ["eng"] })
+      .success,
+  ).toBe(true);
+  expect(
+    ConditionSchema.safeParse({ field, operator: "in", value: "eng" }).success,
+  ).toBe(false);
+  expect(
+    ConditionSchema.safeParse({ field, operator: "notIn", value: [] }).success,
+  ).toBe(false);
+});
+
+test("ConditionSchema requires a number for gt and lt", () => {
+  expect(
+    ConditionSchema.safeParse({ field: "width", operator: "gt", value: 1920 })
+      .success,
+  ).toBe(true);
+  expect(
+    ConditionSchema.safeParse({ field: "width", operator: "gt", value: "a" })
+      .success,
+  ).toBe(false);
+  expect(
+    ConditionSchema.safeParse({ field: "width", operator: "eq", value: [1] })
+      .success,
+  ).toBe(false);
 });

@@ -45,7 +45,6 @@ async function seed(db: ReturnType<typeof setup>) {
     .values({
       libraryId: library.id,
       name: "r",
-      position: 0,
       conditions: [],
       actions: [{ type: "setContainer", container: "mkv" }],
     })

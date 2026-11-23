@@ -60,24 +60,17 @@ export const libraryIntegrations = sqliteTable(
   (t) => [primaryKey({ columns: [t.libraryId, t.integrationId] })],
 );
 
-export const rules = sqliteTable(
-  "rules",
-  {
-    id: integer().primaryKey({ autoIncrement: true }).$type<RuleId>(),
-    libraryId: integer("library_id")
-      .$type<LibraryId>()
-      .notNull()
-      .references(() => libraries.id, { onDelete: "cascade" }),
-    name: text().notNull(),
-    enabled: integer({ mode: "boolean" }).notNull().default(true),
-    position: integer().notNull(),
-    conditions: text({ mode: "json" }).$type<Condition[]>().notNull(),
-    actions: text({ mode: "json" }).$type<Action[]>().notNull(),
-  },
-  (t) => [
-    uniqueIndex("rules_library_position_idx").on(t.libraryId, t.position),
-  ],
-);
+export const rules = sqliteTable("rules", {
+  id: integer().primaryKey({ autoIncrement: true }).$type<RuleId>(),
+  libraryId: integer("library_id")
+    .$type<LibraryId>()
+    .notNull()
+    .references(() => libraries.id, { onDelete: "cascade" }),
+  name: text().notNull(),
+  enabled: integer({ mode: "boolean" }).notNull().default(true),
+  conditions: text({ mode: "json" }).$type<Condition[]>().notNull(),
+  actions: text({ mode: "json" }).$type<Action[]>().notNull(),
+});
 
 export const files = sqliteTable(
   "files",
