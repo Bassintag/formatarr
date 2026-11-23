@@ -8,7 +8,7 @@ import {
 } from "./common.contract";
 import { JobIdSchema, WorkerIdSchema } from "./ids";
 import { JobOfferSchema } from "./jobs.contract";
-import { orpc } from "./orpc";
+import { orpc, workerMeta } from "./orpc";
 
 export const WorkerStatusSchema = z.enum(["online", "busy", "offline"]);
 export type WorkerStatus = z.infer<typeof WorkerStatusSchema>;
@@ -32,10 +32,20 @@ export const WorkerSchema = z.object({
   enabled: z.boolean(),
   capabilities: WorkerCapabilitiesSchema,
   pathMappings: z.array(PathMappingSchema),
-  currentJobId: JobIdSchema.nullable(),
+  runningJobs: z.array(z.object({ id: JobIdSchema })),
   lastSeenAt: z.date().nullable(),
 });
 export type Worker = z.infer<typeof WorkerSchema>;
+
+export const CreatedWorkerSchema = WorkerSchema.extend({
+  token: z.string(),
+});
+export type CreatedWorker = z.infer<typeof CreatedWorkerSchema>;
+
+export const WorkerTokenSchema = z.object({
+  token: z.string(),
+});
+export type WorkerToken = z.infer<typeof WorkerTokenSchema>;
 
 export const CreateWorkerInputSchema = z.object({
   name: z.string().min(1),
@@ -61,7 +71,7 @@ export const workersContract = orpc
     create: orpc
       .route({ method: "POST", path: "/" })
       .input(CreateWorkerInputSchema)
-      .output(WorkerSchema),
+      .output(CreatedWorkerSchema),
     get: orpc
       .route({ method: "GET", path: "/{id}" })
       .input(IdParamsSchema(WorkerIdSchema))
@@ -74,7 +84,12 @@ export const workersContract = orpc
       .route({ method: "DELETE", path: "/{id}" })
       .input(IdParamsSchema(WorkerIdSchema))
       .output(VoidSchema),
+    regenerateToken: orpc
+      .route({ method: "POST", path: "/{id}/token" })
+      .input(IdParamsSchema(WorkerIdSchema))
+      .output(WorkerTokenSchema),
     jobs: orpc
+      .meta(workerMeta)
       .route({ method: "GET", path: "/{id}/jobs" })
       .input(IdParamsSchema(WorkerIdSchema))
       .output(eventIterator(JobOfferSchema)),

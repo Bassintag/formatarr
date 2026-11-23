@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const PaginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(0).default(0),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 export type Pagination = z.infer<typeof PaginationSchema>;
@@ -14,6 +14,7 @@ export function PageSchema<T extends z.ZodType>(schema: T) {
     total: z.int().nonnegative(),
   });
 }
+export type Page<T> = z.infer<ReturnType<typeof PageSchema<z.ZodType<T>>>>;
 
 export function IdParamsSchema<T extends z.ZodType>(schema: T) {
   return z.object({ id: schema });
