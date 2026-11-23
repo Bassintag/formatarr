@@ -15,3 +15,5 @@ export function createContext() {
 }
 
 export type Context = ReturnType<typeof createContext>;
+
+export type RequestContext = Context & { request: Request };

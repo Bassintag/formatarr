@@ -2,9 +2,12 @@ import { mkdirSync, watch } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { SettingsSchema, type SettingsUpdate } from "@formatarr/contract";
 import { memoize } from "es-toolkit";
-import { type Config, ConfigSchema } from "@/settings/config.schema";
+import {
+  type Config,
+  ConfigSchema,
+  type ConfigUpdate,
+} from "@/settings/config.schema";
 
 export function createSettings(dataDir: string) {
   const path = join(dataDir, "config.yml");
@@ -30,17 +33,17 @@ export function createSettings(dataDir: string) {
   });
 
   async function read() {
-    return SettingsSchema.parse(await load());
+    return load();
   }
 
-  async function update(patch: SettingsUpdate) {
+  async function update(patch: ConfigUpdate) {
     const current = await load();
     const next = ConfigSchema.parse({
       auth: { ...current.auth, ...patch.auth },
     });
     await write(next);
     load.cache.clear();
-    return SettingsSchema.parse(next);
+    return next;
   }
 
   mkdirSync(dataDir, { recursive: true });
