@@ -12,5 +12,3 @@ export function createDb(databaseUrl: string) {
   client.run("PRAGMA foreign_keys = ON");
   return drizzle({ client, relations });
 }
-
-export type Db = ReturnType<typeof createDb>;

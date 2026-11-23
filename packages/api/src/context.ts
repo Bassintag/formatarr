@@ -1,6 +1,7 @@
 import { createDb } from "@/lib/db";
 import { createEnv } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
+import { createSettings } from "@/lib/settings";
 
 export function createContext() {
   const env = createEnv();
@@ -9,6 +10,7 @@ export function createContext() {
     env,
     db: createDb(env.DATABASE_URL),
     logger: createLogger(env.LOG_LEVEL),
+    settings: createSettings(env.DATA_DIR),
   };
 }
 
