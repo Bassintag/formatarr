@@ -6,6 +6,7 @@ import { files } from "@/db/schema";
 import { orThrow } from "@/lib/db";
 import { assertDirectory } from "@/libraries/library.lib";
 import { probeFiles } from "@/probe/probe.lib";
+import { createJobsForFiles } from "@/rules/rule.lib";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mkv",
@@ -111,6 +112,7 @@ export async function scanLibrary(
   }
 
   await probeFiles(context, [...created, ...updated]);
+  await createJobsForFiles(context, [...created, ...updated]);
 
   return {
     created: created.length,
