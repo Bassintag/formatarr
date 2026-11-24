@@ -18,4 +18,4 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run build
-      - run: bun test
+      - run: bun test --parallel --no-isolate --randomize --only-failures
