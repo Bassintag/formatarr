@@ -34,6 +34,8 @@ export const libraries = sqliteTable("libraries", {
   name: text().notNull(),
   path: text().notNull(),
   enabled: integer({ mode: "boolean" }).notNull().default(true),
+  scanCron: text("scan_cron"),
+  watch: integer({ mode: "boolean" }).notNull().default(false),
 });
 
 export const integrations = sqliteTable("integrations", {

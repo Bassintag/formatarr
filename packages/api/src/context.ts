@@ -5,8 +5,9 @@ import { createEnv } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { createSettings } from "@/lib/settings";
 import { createProbeRunner } from "@/probe/probe.lib";
+import { createScanScheduler } from "@/scans/scan.scheduler";
 
-export function createContext() {
+export function createPrimitiveContext() {
   const env = createEnv();
 
   return {
@@ -19,6 +20,19 @@ export function createContext() {
   };
 }
 
-export type Context = ReturnType<typeof createContext>;
+export type PrimitiveContext = ReturnType<typeof createPrimitiveContext>;
+
+export async function createContext() {
+  const context = createPrimitiveContext();
+
+  return {
+    ...context,
+    schedulers: {
+      scan: await createScanScheduler(context),
+    },
+  };
+}
+
+export type Context = Awaited<ReturnType<typeof createContext>>;
 
 export type RequestContext = Context & { request: Request };

@@ -43,3 +43,14 @@ export function setIntegrations(
       .run();
   }
 }
+
+export function assertCron(expression: string | null | undefined) {
+  if (!expression) return;
+  try {
+    Bun.cron.parse(expression);
+  } catch {
+    throw new ORPCError("BAD_REQUEST", {
+      message: `Invalid cron expression: ${expression}`,
+    });
+  }
+}

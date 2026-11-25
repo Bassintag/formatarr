@@ -1,6 +1,5 @@
 import { orThrow } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { scanLibrary } from "./scans.lib";
 
 const create = orpc.scans.create.handler(async ({ context, input }) => {
   await orThrow(
@@ -9,12 +8,7 @@ const create = orpc.scans.create.handler(async ({ context, input }) => {
       where: { id: input.libraryId },
     }),
   );
-  scanLibrary(context, input.libraryId).catch((error) => {
-    context.logger.error(
-      { err: error, libraryId: input.libraryId },
-      "scan failed",
-    );
-  });
+  void context.schedulers.scan.scan(input.libraryId);
 });
 
 export const scansRouter = orpc.scans.router({ create });
