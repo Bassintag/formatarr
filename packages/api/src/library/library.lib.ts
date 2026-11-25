@@ -1,13 +1,21 @@
 import fsp from "node:fs/promises";
 import type {
+  File,
+  FileId,
   IntegrationId,
   LibraryId,
+  LibraryPreview,
   LibraryRule,
+  MediaInfo,
 } from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, eq, gt, inArray, notInArray } from "drizzle-orm";
+import type { Context } from "@/context";
 import { integrations, libraryIntegrations, rules } from "@/db/schema";
-import type { Tx } from "@/lib/db";
+import { fileOptions } from "@/file/file.options";
+import { evaluableFiles, JOB_CHUNK_SIZE } from "@/job/job.lib";
+import { buildWhere, type Tx } from "@/lib/db";
+import { findMismatches } from "@/rules/rule.lib";
 
 export async function assertDirectory(path: string) {
   const info = await fsp.stat(path).catch(() => null);
@@ -77,4 +85,46 @@ export function assertCron(expression: string | null | undefined) {
       message: `Invalid cron expression: ${expression}`,
     });
   }
+}
+
+export const PREVIEW_LIMIT = 100;
+
+export function previewRules(
+  db: Context["db"],
+  libraryId: LibraryId,
+  draft: LibraryRule[],
+): LibraryPreview {
+  const active = draft.filter((rule) => rule.enabled);
+  const items: LibraryPreview["items"] = [];
+  let total = 0;
+  let cursor: FileId | null = null;
+
+  while (active.length > 0) {
+    const chunk = db.query.files
+      .findMany({
+        ...fileOptions,
+        where: {
+          RAW: (table) =>
+            buildWhere([
+              evaluableFiles(table, libraryId),
+              cursor === null ? undefined : gt(table.id, cursor),
+            ]),
+        },
+        orderBy: { id: "asc" },
+        limit: JOB_CHUNK_SIZE,
+      })
+      .sync();
+    if (chunk.length === 0) break;
+    for (const file of chunk) {
+      const mismatches = findMismatches(active, file.mediaInfo as MediaInfo);
+      if (mismatches.length === 0) continue;
+      total += 1;
+      if (items.length < PREVIEW_LIMIT) {
+        items.push({ file: file as File, mismatches });
+      }
+    }
+    cursor = chunk[chunk.length - 1]?.id ?? null;
+  }
+
+  return { total, items };
 }

@@ -50,3 +50,9 @@ export const LibraryRulesSchema = z
   .refine((rules) => new Set(rules.map((r) => r.type)).size === rules.length, {
     message: "Only one rule per type is allowed",
   });
+
+export const MismatchSchema = z.object({
+  rule: RuleValueSchema,
+  reason: z.string(),
+});
+export type Mismatch = z.infer<typeof MismatchSchema>;

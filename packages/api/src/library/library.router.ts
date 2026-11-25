@@ -13,6 +13,7 @@ import { orpc } from "@/lib/orpc";
 import {
   assertCron,
   assertDirectory,
+  previewRules,
   setIntegrations,
   setRules,
 } from "@/library/library.lib";
@@ -98,6 +99,17 @@ const update = orpc.libraries.update.handler(async ({ context, input }) => {
   return updated;
 });
 
+const createPreview = orpc.libraries.createPreview.handler(
+  ({ context, input }) => {
+    orThrow(
+      context.db.query.libraries
+        .findFirst({ columns: { id: true }, where: { id: input.id } })
+        .sync(),
+    );
+    return previewRules(context.db, input.id, input.rules);
+  },
+);
+
 const remove = orpc.libraries.remove.handler(({ context, input }) => {
   const removed = firstOrThrow(
     context.db
@@ -115,4 +127,5 @@ export const librariesRouter = orpc.libraries.router({
   get,
   update,
   remove,
+  createPreview,
 });
