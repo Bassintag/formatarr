@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { AppEventSchema } from "./events.contract";
+import { AppEventSchema } from "./event.contract";
 
 test("AppEventSchema parses every resource", () => {
   for (const resource of ["job", "file", "worker"]) {

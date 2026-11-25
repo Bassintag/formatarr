@@ -2,7 +2,7 @@ import fs, { type FSWatcher } from "node:fs";
 import type { Library, LibraryId } from "@formatarr/contract";
 import { debounce } from "es-toolkit";
 import type { PrimitiveContext } from "@/context";
-import { scanLibrary } from "@/scans/scans.lib";
+import { scanLibrary } from "@/scan/scan.lib";
 
 type ScheduledLibrary = Pick<
   Library,

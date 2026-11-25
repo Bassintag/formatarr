@@ -16,7 +16,7 @@ import {
   getFieldValues,
   matchRule,
 } from "@/rules/rule.lib";
-import { scanLibrary } from "@/scans/scans.lib";
+import { scanLibrary } from "@/scan/scan.lib";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
 import { seedFile, seedLibrary, seedRule } from "@/testing/seed";

@@ -9,8 +9,8 @@ import {
   toPage,
 } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { generateWorkerToken, hashWorkerToken } from "@/workers/worker.lib";
-import { workerOptions } from "@/workers/worker.options";
+import { generateWorkerToken, hashWorkerToken } from "@/worker/worker.lib";
+import { workerOptions } from "@/worker/worker.options";
 
 const list = orpc.workers.list.handler(async ({ context, input }) => {
   return toPage(

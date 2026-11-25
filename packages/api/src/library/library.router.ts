@@ -12,8 +12,8 @@ import {
   assertCron,
   assertDirectory,
   setIntegrations,
-} from "@/libraries/library.lib";
-import { libraryOptions } from "@/libraries/library.options";
+} from "@/library/library.lib";
+import { libraryOptions } from "@/library/library.options";
 
 const list = orpc.libraries.list.handler(async ({ context, input }) => {
   return toPage(

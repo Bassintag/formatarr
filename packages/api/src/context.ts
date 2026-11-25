@@ -5,7 +5,7 @@ import { createEnv } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { createSettings } from "@/lib/settings";
 import { createProbeRunner } from "@/probe/probe.lib";
-import { createScanScheduler } from "@/scans/scan.scheduler";
+import { createScanScheduler } from "@/scan/scan.scheduler";
 
 export function createPrimitiveContext() {
   const env = createEnv();

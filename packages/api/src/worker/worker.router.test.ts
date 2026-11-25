@@ -3,7 +3,7 @@ import { jobs, workers } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
 import { seedFile, seedLibrary, seedRule, unknownId } from "@/testing/seed";
-import { hashWorkerToken } from "@/workers/worker.lib";
+import { hashWorkerToken } from "@/worker/worker.lib";
 
 const capabilities = { ffmpegVersion: "7.0", hwaccels: ["vaapi"] };
 

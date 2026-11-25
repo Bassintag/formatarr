@@ -2,7 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { files, type libraries } from "@/db/schema";
-import { createScanScheduler } from "@/scans/scan.scheduler";
+import { createScanScheduler } from "@/scan/scan.scheduler";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
 import { seedLibrary, unknownId } from "@/testing/seed";

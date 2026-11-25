@@ -2,10 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 import { getAuthMeta } from "@formatarr/contract";
 import { ORPCError, os } from "@orpc/server";
 import { eq } from "drizzle-orm";
-import { verifyToken } from "@/auth/tokens";
+import { verifyToken } from "@/auth/token";
 import type { RequestContext } from "@/context";
 import { workers } from "@/db/schema";
-import { hashWorkerToken } from "@/workers/worker.lib";
+import { hashWorkerToken } from "@/worker/worker.lib";
 
 type AuthUser = { username: string };
 type AuthWorker = { id: number };

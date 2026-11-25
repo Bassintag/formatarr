@@ -8,7 +8,7 @@ import {
   VoidSchema,
 } from "./common.contract";
 import { JobIdSchema, WorkerIdSchema } from "./ids";
-import { JobOfferSchema } from "./jobs.contract";
+import { JobOfferSchema } from "./job.contract";
 import { orpc, workerMeta } from "./orpc";
 
 export const WorkerStatusSchema = z.enum(["online", "busy", "offline"]);

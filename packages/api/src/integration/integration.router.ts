@@ -1,6 +1,6 @@
 import { count, eq } from "drizzle-orm";
 import { integrations } from "@/db/schema";
-import { integrationOptions } from "@/integrations/integration.options";
+import { integrationOptions } from "@/integration/integration.options";
 import {
   firstOrThrow,
   hasChanges,

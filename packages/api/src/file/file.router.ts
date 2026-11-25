@@ -1,6 +1,6 @@
 import { count, eq, like, type SQL } from "drizzle-orm";
 import { files } from "@/db/schema";
-import { fileOptions } from "@/files/file.options";
+import { fileOptions } from "@/file/file.options";
 import {
   buildWhere,
   firstOrThrow,

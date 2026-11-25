@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { JobSchema, JobUpdateSchema } from "./jobs.contract";
+import { JobSchema, JobUpdateSchema } from "./job.contract";
 
 const job = {
   id: 1,

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { files } from "@/db/schema";
-import { scanLibrary } from "@/scans/scans.lib";
+import { scanLibrary } from "@/scan/scan.lib";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
 import { seedFile, seedLibrary, unknownId } from "@/testing/seed";

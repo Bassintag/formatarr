@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { count, eq, type SQL } from "drizzle-orm";
 import { jobs } from "@/db/schema";
-import { jobOptions } from "@/jobs/job.options";
+import { jobOptions } from "@/job/job.options";
 import {
   buildWhere,
   firstOrThrow,
