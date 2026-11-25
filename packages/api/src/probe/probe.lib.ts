@@ -5,7 +5,7 @@ import {
 } from "@formatarr/contract";
 import { eq, inArray } from "drizzle-orm";
 import { Semaphore } from "es-toolkit";
-import z from "zod";
+import { z } from "zod";
 import type { Context } from "@/context";
 import { files } from "@/db/schema";
 

@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import { join } from "node:path";
+import { createSettings } from "@/lib/settings";
 import { mockFileSystem } from "@/testing/memory-fs";
-import { createSettings } from "./settings";
 
 const dataDir = "/data";
 

@@ -1,15 +1,24 @@
-import type { RuleId } from "@formatarr/contract";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { rules } from "@/db/schema";
-import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
+import {
+  buildWhere,
+  firstOrThrow,
+  hasChanges,
+  orThrow,
+  paginationOption,
+  toPage,
+} from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { assertLibraryExists } from "./rule.lib";
-import { ruleOptions } from "./rule.options";
+import { assertLibraryExists } from "@/rules/rule.lib";
+import { ruleOptions } from "@/rules/rule.options";
 
 const list = orpc.rules.list.handler(async ({ context, input }) => {
   function where(table: typeof rules) {
-    if (input.libraryId == null) return sql`true`;
-    return eq(table.libraryId, input.libraryId);
+    return buildWhere([
+      input.libraryId == null
+        ? undefined
+        : eq(table.libraryId, input.libraryId),
+    ]);
   }
 
   return toPage(
@@ -24,10 +33,9 @@ const list = orpc.rules.list.handler(async ({ context, input }) => {
 });
 
 const create = orpc.rules.create.handler(async ({ context, input }) => {
-  const id = context.db.transaction((tx) => {
+  const { id } = context.db.transaction((tx) => {
     assertLibraryExists(tx, input.libraryId);
-    const { lastInsertRowid } = tx.insert(rules).values(input).run();
-    return Number(lastInsertRowid) as RuleId;
+    return tx.insert(rules).values(input).returning({ id: rules.id }).get();
   });
   return orThrow(
     context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }),
@@ -45,11 +53,14 @@ const get = orpc.rules.get.handler(({ context, input }) =>
 
 const update = orpc.rules.update.handler(async ({ context, input }) => {
   const { id, ...changes } = input;
-  await orThrow(
-    context.db.query.rules.findFirst({ columns: { id: true }, where: { id } }),
-  );
-  if (Object.values(changes).some((value) => value !== undefined)) {
-    context.db.update(rules).set(changes).where(eq(rules.id, id)).run();
+  if (hasChanges(changes)) {
+    await firstOrThrow(
+      context.db
+        .update(rules)
+        .set(changes)
+        .where(eq(rules.id, id))
+        .returning({ id: rules.id }),
+    );
   }
   return orThrow(
     context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }),

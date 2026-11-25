@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { issueTokens, verifyToken } from "@/auth/tokens";
+import { issueTokens, verifyToken } from "@/auth/token";
 import { orpc } from "@/lib/orpc";
 
 const setup = orpc.auth.setup.handler(async ({ context, input }) => {

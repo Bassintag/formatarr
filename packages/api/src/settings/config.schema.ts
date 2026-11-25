@@ -1,4 +1,4 @@
-import z from "zod";
+import { z } from "zod";
 
 function generateSecret() {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString(

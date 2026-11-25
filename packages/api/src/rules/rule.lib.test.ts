@@ -8,18 +8,18 @@ import type {
   MediaInfo,
 } from "@formatarr/contract";
 import { eq } from "drizzle-orm";
-import { files, jobs, libraries, rules } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
-import { scanLibrary } from "@/scans/scans.lib";
-import { createTestContext } from "@/testing/harness";
-import { mockFileSystem } from "@/testing/memory-fs";
+import { files, jobs } from "@/db/schema";
 import {
   createJobsForFiles,
   evaluateCondition,
   findMatchingRule,
   getFieldValues,
   matchRule,
-} from "./rule.lib";
+} from "@/rules/rule.lib";
+import { scanLibrary } from "@/scan/scan.lib";
+import { createTestContext } from "@/testing/harness";
+import { mockFileSystem } from "@/testing/memory-fs";
+import { seedFile, seedLibrary, seedRule } from "@/testing/seed";
 
 const mediaInfo: MediaInfo = {
   container: "matroska",
@@ -287,44 +287,27 @@ const actions = [{ type: "setContainer", container: "mp4" }] as never;
 
 async function setupJobs() {
   const context = createTestContext();
-  const library = await firstOrThrow(
-    context.db
-      .insert(libraries)
-      .values({ name: "lib", path: "/tmp/lib" })
-      .returning({ id: libraries.id }),
-  );
+  const library = seedLibrary(context.db, { path: "/tmp/lib" });
   const addRule = (
     conditions: Condition[],
     options: { enabled?: boolean; libraryId?: LibraryId } = {},
   ) =>
-    firstOrThrow(
-      context.db
-        .insert(rules)
-        .values({
-          libraryId: options.libraryId ?? library.id,
-          name: "rule",
-          enabled: options.enabled ?? true,
-          conditions,
-          actions,
-        })
-        .returning({ id: rules.id }),
-    );
+    seedRule(context.db, options.libraryId ?? library.id, {
+      name: "rule",
+      enabled: options.enabled ?? true,
+      conditions,
+      actions,
+    });
   const addFile = (
     name: string,
     values: Partial<typeof files.$inferInsert> = {},
   ) =>
-    firstOrThrow(
-      context.db
-        .insert(files)
-        .values({
-          libraryId: library.id,
-          path: `/tmp/lib/${name}`,
-          size: 1000,
-          mediaInfo,
-          ...values,
-        })
-        .returning({ id: files.id }),
-    );
+    seedFile(context.db, library.id, {
+      path: `/tmp/lib/${name}`,
+      size: 1000,
+      mediaInfo,
+      ...values,
+    });
   const allJobs = () => context.db.select().from(jobs).all();
   const fileStatus = (id: FileId) =>
     context.db.select().from(files).where(eq(files.id, id)).get()?.status;
@@ -401,12 +384,7 @@ describe("createJobsForFiles", () => {
 
   test("ignores rules from other libraries", async () => {
     const { context, addRule, addFile, allJobs } = await setupJobs();
-    const other = await firstOrThrow(
-      context.db
-        .insert(libraries)
-        .values({ name: "other", path: "/tmp/other" })
-        .returning({ id: libraries.id }),
-    );
+    const other = seedLibrary(context.db, { name: "other" });
     await addRule([], { libraryId: other.id });
     const f = await addFile("a.mkv");
     expect(await createJobsForFiles(context, [f.id])).toBe(0);
@@ -427,14 +405,8 @@ describe("scanLibrary integration", () => {
     const context = createTestContext();
     const root = "/media";
     mockFileSystem({ [join(root, "movie.mkv")]: "12345" });
-    const library = await firstOrThrow(
-      context.db
-        .insert(libraries)
-        .values({ name: "lib", path: root })
-        .returning({ id: libraries.id }),
-    );
-    await context.db.insert(rules).values({
-      libraryId: library.id,
+    const library = seedLibrary(context.db, { path: root });
+    seedRule(context.db, library.id, {
       name: "h264",
       conditions: [cond("videoCodec", "eq", "h264")],
       actions,
