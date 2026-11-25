@@ -500,3 +500,127 @@ describe("libraries rules", () => {
     );
   });
 });
+
+describe("libraries previews", () => {
+  function harness() {
+    const { call, db } = createTestCaller();
+    const library = seedLibrary(db, { name: "movies" }).id;
+    const file = (status: FileStatus, values = {}) =>
+      seedFile(db, library, { status, mediaInfo, ...values }).id;
+    return { call, db, library, file };
+  }
+
+  test("lists the files breaking the draft rules with their reasons", async () => {
+    const { call, library, file } = harness();
+    const broken = file("pending");
+    file("pending", {
+      mediaInfo: { ...mediaInfo, container: "mkv" },
+    });
+
+    const preview = await call.libraries.createPreview({
+      id: library,
+      rules: [sample.container, sample.maxBitrate],
+    });
+
+    expect(preview.total).toBe(1);
+    expect(preview.items).toHaveLength(1);
+    expect(preview.items[0]?.file.id).toBe(broken);
+    expect(preview.items[0]?.mismatches).toEqual([
+      {
+        rule: { type: "container", value: "mkv" },
+        reason: "Container is matroska, expected mkv",
+      },
+    ]);
+  });
+
+  test("ignores the saved rules and the disabled draft rules", async () => {
+    const { call, db, library, file } = harness();
+    file("pending");
+    seedRule(db, library, { type: "container", value: "mkv" });
+
+    const preview = await call.libraries.createPreview({
+      id: library,
+      rules: [{ ...sample.container, enabled: false }],
+    });
+
+    expect(preview).toEqual({ total: 0, items: [] });
+  });
+
+  test("includes done files and skips the other ones", async () => {
+    const { call, library, file } = harness();
+    const done = file("done");
+    const pending = file("pending");
+    file("queued");
+    file("processing");
+    file("failed");
+    file("pending", { ignored: true });
+    file("pending", { mediaInfo: null });
+
+    const preview = await call.libraries.createPreview({
+      id: library,
+      rules: [sample.container],
+    });
+
+    expect(preview.items.map((item) => item.file.id)).toEqual([done, pending]);
+    expect(preview.total).toBe(2);
+  });
+
+  test("caps the items at 100 but counts every match", async () => {
+    const { call, library, file } = harness();
+    for (let i = 0; i < 520; i += 1) file("pending");
+
+    const preview = await call.libraries.createPreview({
+      id: library,
+      rules: [sample.container],
+    });
+
+    expect(preview.total).toBe(520);
+    expect(preview.items).toHaveLength(100);
+  });
+
+  test("only looks at the files of the library", async () => {
+    const { call, db, library, file } = harness();
+    file("pending");
+    const other = seedLibrary(db, { name: "other" }).id;
+    seedFile(db, other, { status: "pending", mediaInfo });
+
+    const preview = await call.libraries.createPreview({
+      id: library,
+      rules: [sample.container],
+    });
+
+    expect(preview.total).toBe(1);
+  });
+
+  test("unknown library is not found", async () => {
+    const { call } = harness();
+    expect(
+      call.libraries.createPreview({
+        id: unknownId,
+        rules: [],
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  test("creates no job and leaves files untouched", async () => {
+    const { call, db, library, file } = harness();
+    const pending = file("pending");
+    const done = file("done");
+
+    await call.libraries.createPreview({
+      id: library,
+      rules: [sample.container],
+    });
+
+    expect(db.select().from(jobs).all()).toEqual([]);
+    const statuses = db
+      .select({ id: files.id, status: files.status })
+      .from(files)
+      .orderBy(files.id)
+      .all();
+    expect(statuses).toEqual([
+      { id: pending, status: "pending" },
+      { id: done, status: "done" },
+    ]);
+  });
+});

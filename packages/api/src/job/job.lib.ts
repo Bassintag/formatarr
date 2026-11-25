@@ -11,7 +11,16 @@ import type { Context } from "@/context";
 import { files, jobRules, jobs, rules as rulesTable } from "@/db/schema";
 import { findUnmetRules } from "@/rules/rule.lib";
 
-const JOB_CHUNK_SIZE = 500;
+export const JOB_CHUNK_SIZE = 500;
+
+export function evaluableFiles(table: typeof files, libraryId: LibraryId) {
+  return and(
+    eq(table.libraryId, libraryId),
+    inArray(table.status, ["pending", "done"]),
+    eq(table.ignored, false),
+    isNotNull(table.mediaInfo),
+  );
+}
 
 export async function createJobsForFiles(
   context: Pick<Context, "db" | "events" | "logger">,
@@ -108,14 +117,7 @@ export async function reevaluateLibrary(
     const candidates = tx
       .select({ id: files.id, status: files.status })
       .from(files)
-      .where(
-        and(
-          eq(files.libraryId, libraryId),
-          inArray(files.status, ["pending", "done"]),
-          eq(files.ignored, false),
-          isNotNull(files.mediaInfo),
-        ),
-      )
+      .where(evaluableFiles(files, libraryId))
       .all();
     const reset = candidates
       .filter((file) => file.status === "done")

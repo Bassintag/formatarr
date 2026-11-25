@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { MediaInfo, RuleValue } from "@formatarr/contract";
-import { findUnmetRules, isRuleSatisified } from "@/rules/rule.lib";
+import {
+  findMismatches,
+  findUnmetRules,
+  isRuleSatisified,
+} from "@/rules/rule.lib";
 
 const richMedia: MediaInfo = {
   container: "matroska",
@@ -93,5 +97,50 @@ describe("findUnmetRules", () => {
     expect(
       findUnmetRules([{ type: "container", value: "matroska" }], richMedia),
     ).toEqual([]);
+  });
+});
+
+describe("findMismatches", () => {
+  const reason = (rule: RuleValue, info: MediaInfo = richMedia) =>
+    findMismatches([rule], info)[0]?.reason;
+
+  test("returns nothing when every rule is satisfied", () => {
+    expect(
+      findMismatches(
+        [
+          { type: "container", value: "matroska" },
+          { type: "maxResolution", value: 1080 },
+        ],
+        richMedia,
+      ),
+    ).toEqual([]);
+  });
+
+  test("keeps the rule next to its reason", () => {
+    const rule: RuleValue = { type: "container", value: "mp4" };
+    expect(findMismatches([rule], richMedia)).toEqual([
+      { rule, reason: "Container is matroska, expected mp4" },
+    ]);
+  });
+
+  test("describes each rule type", () => {
+    expect(reason({ type: "videoCodec", value: "hevc" })).toBe(
+      "Video codec is h264, expected hevc",
+    );
+    expect(reason({ type: "maxResolution", value: 720 })).toBe(
+      "Resolution 1080p exceeds max 720p",
+    );
+    expect(reason({ type: "maxBitrate", value: 4000 })).toBe(
+      "Bitrate 5000 exceeds max 4000",
+    );
+    expect(reason({ type: "audioCodec", value: "opus" })).toBe(
+      "Audio codecs aac differ from opus",
+    );
+    expect(reason({ type: "audioLanguages", value: ["fra"] })).toBe(
+      "Audio languages not allowed: eng",
+    );
+    expect(reason({ type: "subtitleLanguages", value: ["eng"] })).toBe(
+      "Subtitle languages not allowed: fra",
+    );
   });
 });

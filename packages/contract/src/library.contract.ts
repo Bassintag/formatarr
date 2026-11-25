@@ -6,9 +6,14 @@ import {
   UpdateSchema,
   VoidSchema,
 } from "./common.contract";
+import { FileSchema } from "./file.contract";
 import { IntegrationIdSchema, LibraryIdSchema } from "./ids";
 import { orpc } from "./orpc";
-import { LibraryRulesSchema, RuleSchema } from "./rule.contract";
+import {
+  LibraryRulesSchema,
+  MismatchSchema,
+  RuleSchema,
+} from "./rule.contract";
 
 export const LibrarySchema = z.object({
   id: LibraryIdSchema,
@@ -39,6 +44,23 @@ export const LibraryUpdateSchema = UpdateSchema(
 );
 export type LibraryUpdate = z.infer<typeof LibraryUpdateSchema>;
 
+export const LibraryPreviewInputSchema = z.object({
+  id: LibraryIdSchema,
+  rules: LibraryRulesSchema,
+});
+export type LibraryPreviewInput = z.infer<typeof LibraryPreviewInputSchema>;
+
+export const LibraryPreviewSchema = z.object({
+  total: z.int().nonnegative(),
+  items: z.array(
+    z.object({
+      file: FileSchema,
+      mismatches: z.array(MismatchSchema),
+    }),
+  ),
+});
+export type LibraryPreview = z.infer<typeof LibraryPreviewSchema>;
+
 export const librariesContract = orpc
   .route({ prefix: "/libraries", tags: ["libraries"] })
   .router({
@@ -62,4 +84,8 @@ export const librariesContract = orpc
       .route({ method: "DELETE", path: "/{id}" })
       .input(IdParamsSchema(LibraryIdSchema))
       .output(VoidSchema),
+    createPreview: orpc
+      .route({ method: "POST", path: "/{id}/previews" })
+      .input(LibraryPreviewInputSchema)
+      .output(LibraryPreviewSchema),
   });
