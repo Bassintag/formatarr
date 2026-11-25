@@ -25,10 +25,10 @@ function setup() {
 describe("files", () => {
   test("list filters by library", async () => {
     const { seedLibrary, seedFile, paths } = setup();
-    const one = await seedLibrary("one");
-    const two = await seedLibrary("two");
-    await seedFile(one, "/a.mkv");
-    await seedFile(two, "/b.mkv");
+    const one = seedLibrary("one");
+    const two = seedLibrary("two");
+    seedFile(one, "/a.mkv");
+    seedFile(two, "/b.mkv");
 
     expect(await paths({ libraryId: one })).toEqual(["/a.mkv"]);
     expect(await paths({})).toEqual(["/a.mkv", "/b.mkv"]);
@@ -36,26 +36,26 @@ describe("files", () => {
 
   test("list filters by status", async () => {
     const { seedLibrary, seedFile, paths } = setup();
-    const library = await seedLibrary("one");
-    await seedFile(library, "/a.mkv", "pending");
-    await seedFile(library, "/b.mkv", "done");
+    const library = seedLibrary("one");
+    seedFile(library, "/a.mkv", "pending");
+    seedFile(library, "/b.mkv", "done");
 
     expect(await paths({ status: "done" })).toEqual(["/b.mkv"]);
   });
 
   test("list searches paths", async () => {
     const { seedLibrary, seedFile, paths } = setup();
-    const library = await seedLibrary("one");
-    await seedFile(library, "/movies/Alien.mkv");
-    await seedFile(library, "/movies/Heat.mkv");
+    const library = seedLibrary("one");
+    seedFile(library, "/movies/Alien.mkv");
+    seedFile(library, "/movies/Heat.mkv");
 
     expect(await paths({ search: "alien" })).toEqual(["/movies/Alien.mkv"]);
   });
 
   test("list paginates and reports the total", async () => {
     const { call, seedLibrary, seedFile } = setup();
-    const library = await seedLibrary("one");
-    for (const name of ["a", "b", "c"]) await seedFile(library, `/${name}`);
+    const library = seedLibrary("one");
+    for (const name of ["a", "b", "c"]) seedFile(library, `/${name}`);
 
     const page = await call.files.list({ page: 1, pageSize: 2 });
 
@@ -65,8 +65,8 @@ describe("files", () => {
 
   test("get returns the file", async () => {
     const { call, seedLibrary, seedFile } = setup();
-    const library = await seedLibrary("one");
-    const id = await seedFile(library, "/a.mkv");
+    const library = seedLibrary("one");
+    const id = seedFile(library, "/a.mkv");
 
     expect(await call.files.get({ id })).toEqual({
       id,
@@ -81,8 +81,8 @@ describe("files", () => {
 
   test("update toggles ignored", async () => {
     const { call, seedLibrary, seedFile } = setup();
-    const library = await seedLibrary("one");
-    const id = await seedFile(library, "/a.mkv");
+    const library = seedLibrary("one");
+    const id = seedFile(library, "/a.mkv");
 
     const ignored = await call.files.update({ id, ignored: true });
     const restored = await call.files.update({ id, ignored: false });

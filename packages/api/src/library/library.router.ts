@@ -15,14 +15,16 @@ import {
 } from "@/library/library.lib";
 import { libraryOptions } from "@/library/library.options";
 
-const list = orpc.libraries.list.handler(async ({ context, input }) => {
+const list = orpc.libraries.list.handler(({ context, input }) => {
   return toPage(
-    context.db.query.libraries.findMany({
-      ...libraryOptions,
-      orderBy: { id: "asc" },
-      ...paginationOption(input),
-    }),
-    context.db.select({ total: count() }).from(libraries),
+    context.db.query.libraries
+      .findMany({
+        ...libraryOptions,
+        orderBy: { id: "asc" },
+        ...paginationOption(input),
+      })
+      .sync(),
+    context.db.select({ total: count() }).from(libraries).all(),
   );
 });
 
@@ -39,34 +41,40 @@ const create = orpc.libraries.create.handler(async ({ context, input }) => {
     setIntegrations(tx, row.id, integrations);
     return row;
   });
-  const created = await orThrow(
-    context.db.query.libraries.findFirst({
-      ...libraryOptions,
-      where: { id },
-    }),
+  const created = orThrow(
+    context.db.query.libraries
+      .findFirst({
+        ...libraryOptions,
+        where: { id },
+      })
+      .sync(),
   );
   context.schedulers.scan.update(created);
   return created;
 });
 
-const get = orpc.libraries.get.handler(({ context, input }) =>
-  orThrow(
-    context.db.query.libraries.findFirst({
-      ...libraryOptions,
-      where: { id: input.id },
-    }),
-  ),
-);
+const get = orpc.libraries.get.handler(({ context, input }) => {
+  return orThrow(
+    context.db.query.libraries
+      .findFirst({
+        ...libraryOptions,
+        where: { id: input.id },
+      })
+      .sync(),
+  );
+});
 
 const update = orpc.libraries.update.handler(async ({ context, input }) => {
   const { id, integrations, ...changes } = input;
   if (changes.path !== undefined) await assertDirectory(changes.path);
   assertCron(changes.scanCron);
-  await orThrow(
-    context.db.query.libraries.findFirst({
-      columns: { id: true },
-      where: { id },
-    }),
+  orThrow(
+    context.db.query.libraries
+      .findFirst({
+        columns: { id: true },
+        where: { id },
+      })
+      .sync(),
   );
   context.db.transaction((tx) => {
     if (hasChanges(changes)) {
@@ -76,22 +84,25 @@ const update = orpc.libraries.update.handler(async ({ context, input }) => {
       setIntegrations(tx, id, integrations);
     }
   });
-  const updated = await orThrow(
-    context.db.query.libraries.findFirst({
-      ...libraryOptions,
-      where: { id },
-    }),
+  const updated = orThrow(
+    context.db.query.libraries
+      .findFirst({
+        ...libraryOptions,
+        where: { id },
+      })
+      .sync(),
   );
   context.schedulers.scan.update(updated);
   return updated;
 });
 
-const remove = orpc.libraries.remove.handler(async ({ context, input }) => {
-  const removed = await firstOrThrow(
+const remove = orpc.libraries.remove.handler(({ context, input }) => {
+  const removed = firstOrThrow(
     context.db
       .delete(libraries)
       .where(eq(libraries.id, input.id))
-      .returning({ id: libraries.id }),
+      .returning({ id: libraries.id })
+      .all(),
   );
   context.schedulers.scan.remove(removed.id);
 });

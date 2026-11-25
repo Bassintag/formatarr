@@ -48,8 +48,8 @@ export async function scanLibrary(
   libraryId: LibraryId,
 ): Promise<ScanResult> {
   const { db, events } = context;
-  const library = await orThrow(
-    db.query.libraries.findFirst({ where: { id: libraryId } }),
+  const library = orThrow(
+    db.query.libraries.findFirst({ where: { id: libraryId } }).sync(),
   );
   await assertDirectory(library.path);
   const onDisk = await walkMedia(library.path);

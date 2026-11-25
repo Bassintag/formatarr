@@ -29,7 +29,7 @@ describe("workers CRUD", () => {
     expect(created).not.toHaveProperty("tokenHash");
     expect(created.runningJobs).toEqual([]);
 
-    const [row] = await db.select().from(workers);
+    const [row] = db.select().from(workers).all();
     expect(row?.tokenHash).not.toBe(created.token);
     expect(row?.tokenHash).toBe(hashWorkerToken(created.token));
 
@@ -105,12 +105,15 @@ describe("running jobs", () => {
     const library = seedLibrary(db);
     const file = seedFile(db, library.id);
     const base = { fileId: file.id, workerId: worker.id };
-    await db.insert(jobs).values({ ...base, status: "queued" });
-    const running = await firstOrThrow(
+    db.insert(jobs)
+      .values({ ...base, status: "queued" })
+      .run();
+    const running = firstOrThrow(
       db
         .insert(jobs)
         .values({ ...base, status: "running" })
-        .returning(),
+        .returning()
+        .all(),
     );
 
     const fetched = await call.workers.get({ id: worker.id });

@@ -30,7 +30,7 @@ describe("integrations CRUD", () => {
 
     const { id } = await call.integrations.create(input);
 
-    const row = await db.query.integrations.findFirst({ where: { id } });
+    const row = db.query.integrations.findFirst({ where: { id } }).sync();
     expect(row?.apiKey).toBe(API_KEY);
   });
 
@@ -77,7 +77,7 @@ describe("integrations CRUD", () => {
     expect(renamed.name).toBe("films");
     expect(renamed.baseUrl).toBe(input.baseUrl);
     expect(renamed.apiKey).toBe("••••1234");
-    const unchanged = await db.query.integrations.findFirst({ where: { id } });
+    const unchanged = db.query.integrations.findFirst({ where: { id } }).sync();
     expect(unchanged?.apiKey).toBe(API_KEY);
 
     const rekeyed = await call.integrations.update({
@@ -85,7 +85,7 @@ describe("integrations CRUD", () => {
       apiKey: "another-key-5678",
     });
     expect(rekeyed.apiKey).toBe("••••5678");
-    const replaced = await db.query.integrations.findFirst({ where: { id } });
+    const replaced = db.query.integrations.findFirst({ where: { id } }).sync();
     expect(replaced?.apiKey).toBe("another-key-5678");
   });
 
@@ -93,18 +93,18 @@ describe("integrations CRUD", () => {
     const { call, db } = createTestCaller();
     const { id } = await call.integrations.create(input);
     const library = seedLibrary(db);
-    await db
-      .insert(libraryIntegrations)
-      .values({ libraryId: library.id, integrationId: id });
+    db.insert(libraryIntegrations)
+      .values({ libraryId: library.id, integrationId: id })
+      .run();
 
     await call.integrations.remove({ id });
 
     expect(call.integrations.get({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    expect(await db.select().from(libraryIntegrations)).toEqual([]);
+    expect(db.select().from(libraryIntegrations).all()).toEqual([]);
     expect(
-      await db.select().from(integrations).where(eq(integrations.id, id)),
+      db.select().from(integrations).where(eq(integrations.id, id)).all(),
     ).toEqual([]);
   });
 

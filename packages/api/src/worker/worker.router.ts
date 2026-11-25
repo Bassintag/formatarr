@@ -12,20 +12,22 @@ import { orpc } from "@/lib/orpc";
 import { generateWorkerToken, hashWorkerToken } from "@/worker/worker.lib";
 import { workerOptions } from "@/worker/worker.options";
 
-const list = orpc.workers.list.handler(async ({ context, input }) => {
+const list = orpc.workers.list.handler(({ context, input }) => {
   return toPage(
-    context.db.query.workers.findMany({
-      ...workerOptions,
-      orderBy: { id: "asc" },
-      ...paginationOption(input),
-    }),
-    context.db.select({ total: count() }).from(workers),
+    context.db.query.workers
+      .findMany({
+        ...workerOptions,
+        orderBy: { id: "asc" },
+        ...paginationOption(input),
+      })
+      .sync(),
+    context.db.select({ total: count() }).from(workers).all(),
   );
 });
 
 const create = orpc.workers.create.handler(async ({ context, input }) => {
   const token = generateWorkerToken();
-  const created = await firstOrThrow(
+  const created = firstOrThrow(
     context.db
       .insert(workers)
       .values({
@@ -33,13 +35,16 @@ const create = orpc.workers.create.handler(async ({ context, input }) => {
         capabilities: input.capabilities,
         tokenHash: hashWorkerToken(token),
       })
-      .returning({ id: workers.id }),
+      .returning({ id: workers.id })
+      .all(),
   );
-  const worker = await orThrow(
-    context.db.query.workers.findFirst({
-      ...workerOptions,
-      where: { id: created.id },
-    }),
+  const worker = orThrow(
+    context.db.query.workers
+      .findFirst({
+        ...workerOptions,
+        where: { id: created.id },
+      })
+      .sync(),
   );
   await context.events.publish("event", {
     resource: "worker",
@@ -49,24 +54,27 @@ const create = orpc.workers.create.handler(async ({ context, input }) => {
   return { ...worker, token };
 });
 
-const get = orpc.workers.get.handler(({ context, input }) =>
-  orThrow(
-    context.db.query.workers.findFirst({
-      ...workerOptions,
-      where: { id: input.id },
-    }),
-  ),
-);
+const get = orpc.workers.get.handler(({ context, input }) => {
+  return orThrow(
+    context.db.query.workers
+      .findFirst({
+        ...workerOptions,
+        where: { id: input.id },
+      })
+      .sync(),
+  );
+});
 
 const update = orpc.workers.update.handler(async ({ context, input }) => {
   const { id, ...changes } = input;
   if (hasChanges(changes)) {
-    await firstOrThrow(
+    firstOrThrow(
       context.db
         .update(workers)
         .set(changes)
         .where(eq(workers.id, id))
-        .returning({ id: workers.id }),
+        .returning({ id: workers.id })
+        .all(),
     );
     await context.events.publish("event", {
       resource: "worker",
@@ -75,19 +83,22 @@ const update = orpc.workers.update.handler(async ({ context, input }) => {
     });
   }
   return orThrow(
-    context.db.query.workers.findFirst({
-      ...workerOptions,
-      where: { id },
-    }),
+    context.db.query.workers
+      .findFirst({
+        ...workerOptions,
+        where: { id },
+      })
+      .sync(),
   );
 });
 
 const remove = orpc.workers.remove.handler(async ({ context, input }) => {
-  await firstOrThrow(
+  firstOrThrow(
     context.db
       .delete(workers)
       .where(eq(workers.id, input.id))
-      .returning({ id: workers.id }),
+      .returning({ id: workers.id })
+      .all(),
   );
   await context.events.publish("event", {
     resource: "worker",
@@ -99,12 +110,13 @@ const remove = orpc.workers.remove.handler(async ({ context, input }) => {
 const regenerateToken = orpc.workers.regenerateToken.handler(
   async ({ context, input }) => {
     const token = generateWorkerToken();
-    await firstOrThrow(
+    firstOrThrow(
       context.db
         .update(workers)
         .set({ tokenHash: hashWorkerToken(token) })
         .where(eq(workers.id, input.id))
-        .returning({ id: workers.id }),
+        .returning({ id: workers.id })
+        .all(),
     );
     await context.events.publish("event", {
       resource: "worker",

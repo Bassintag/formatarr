@@ -75,16 +75,18 @@ export async function createScanScheduler(
     handles.delete(libraryId);
   }
 
-  const enabledLibraries = await context.db.query.libraries.findMany({
-    columns: {
-      id: true,
-      enabled: true,
-      path: true,
-      scanCron: true,
-      watch: true,
-    },
-    where: { enabled: true },
-  });
+  const enabledLibraries = context.db.query.libraries
+    .findMany({
+      columns: {
+        id: true,
+        enabled: true,
+        path: true,
+        scanCron: true,
+        watch: true,
+      },
+      where: { enabled: true },
+    })
+    .sync();
   await Promise.all(enabledLibraries.map(update));
 
   return { scan, update, remove };

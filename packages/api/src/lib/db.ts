@@ -31,25 +31,18 @@ export type QueryOptions<
   TableT extends keyof ReturnType<typeof createDb>["query"],
 > = Parameters<ReturnType<typeof createDb>["query"][TableT]["findMany"]>[0];
 
-export async function toPage<T>(
-  itemsPromise: Promise<T[]>,
-  totalPromise: Promise<{ total: number }[]>,
-) {
-  const [items, { total }] = await Promise.all([
-    itemsPromise,
-    firstOrThrow(totalPromise),
-  ]);
+export function toPage<T>(items: T[], totals: { total: number }[]) {
+  const { total } = firstOrThrow(totals);
   return { items, total } satisfies Page<T>;
 }
 
-export async function orThrow<T>(promise: Promise<T | null>) {
-  const result = await promise;
+export function orThrow<T>(result: T | null | undefined) {
   if (result == null) throw new ORPCError("NOT_FOUND");
   return result;
 }
 
-export async function firstOrThrow<T>(promise: Promise<T[]>) {
-  const [result] = await promise;
+export function firstOrThrow<T>(rows: T[]) {
+  const [result] = rows;
   if (result == null) throw new ORPCError("NOT_FOUND");
   return result;
 }

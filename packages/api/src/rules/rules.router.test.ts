@@ -31,7 +31,7 @@ function setup() {
 describe("rules CRUD", () => {
   test("create and get", async () => {
     const { call, seedLibrary, rule } = setup();
-    const library = await seedLibrary("movies");
+    const library = seedLibrary("movies");
 
     const created = await call.rules.create(rule(library));
 
@@ -47,8 +47,8 @@ describe("rules CRUD", () => {
 
   test("list filters by library and paginates", async () => {
     const { call, seedLibrary, rule } = setup();
-    const one = await seedLibrary("one");
-    const two = await seedLibrary("two");
+    const one = seedLibrary("one");
+    const two = seedLibrary("two");
     for (const type of ["container", "videoCodec", "audioCodec"] as const)
       await call.rules.create(rule(one, type));
     await call.rules.create(rule(two));
@@ -67,7 +67,7 @@ describe("rules CRUD", () => {
 
   test("set replaces the rule", async () => {
     const { call, seedLibrary, rule } = setup();
-    const library = await seedLibrary("movies");
+    const library = seedLibrary("movies");
     const created = await call.rules.create(rule(library, "maxBitrate"));
 
     const updated = await call.rules.set({
@@ -102,7 +102,7 @@ describe("rules CRUD", () => {
 
   test("remove deletes the rule", async () => {
     const { call, seedLibrary, rule, types } = setup();
-    const library = await seedLibrary("movies");
+    const library = seedLibrary("movies");
     await call.rules.create(rule(library));
     const b = await call.rules.create(rule(library, "videoCodec"));
 
@@ -116,7 +116,7 @@ describe("rules CRUD", () => {
 
   test("create rejects a value that does not match the type", async () => {
     const { call, seedLibrary } = setup();
-    const library = await seedLibrary("movies");
+    const library = seedLibrary("movies");
 
     expect(
       call.rules.create({
@@ -130,18 +130,16 @@ describe("rules CRUD", () => {
 
   test("create rejects a second rule of the same type in a library", async () => {
     const { call, seedLibrary, rule } = setup();
-    const library = await seedLibrary("movies");
+    const library = seedLibrary("movies");
     await call.rules.create(rule(library));
 
     expect(call.rules.create(rule(library))).rejects.toThrow();
-    expect(
-      await call.rules.create(rule(await seedLibrary("other"))),
-    ).toBeDefined();
+    expect(await call.rules.create(rule(seedLibrary("other")))).toBeDefined();
   });
 
   test("set rejects a value that does not match the type", async () => {
     const { call, seedLibrary, rule } = setup();
-    const library = await seedLibrary("movies");
+    const library = seedLibrary("movies");
     const created = await call.rules.create(rule(library, "maxBitrate"));
 
     expect(
