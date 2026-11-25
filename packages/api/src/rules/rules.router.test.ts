@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { libraries } from "@/db/schema";
+import type { LibraryId } from "@formatarr/contract";
 import { createTestCaller } from "@/testing/harness";
+import { seedLibrary, unknownId } from "@/testing/seed";
 
 const conditions = [
   { field: "videoCodec", operator: "neq", value: "hevc" },
@@ -9,29 +10,19 @@ const actions = [{ type: "setContainer", container: "mkv" }] as const;
 
 function setup() {
   const { call, db } = createTestCaller();
-  const seedLibrary = async (name: string) => {
-    const [row] = await db
-      .insert(libraries)
-      .values({ name, path: "/tmp" })
-      .returning({ id: libraries.id });
-    if (!row) throw new Error("seed failed");
-    return row.id;
-  };
-  const rule = (
-    libraryId: Awaited<ReturnType<typeof seedLibrary>>,
-    name: string,
-  ) => ({
+  const library = (name: string) => seedLibrary(db, { name }).id;
+  const rule = (libraryId: LibraryId, name: string) => ({
     libraryId,
     name,
     enabled: true,
     conditions: [...conditions],
     actions: [...actions],
   });
-  const names = async (libraryId: Awaited<ReturnType<typeof seedLibrary>>) =>
+  const names = async (libraryId: LibraryId) =>
     (await call.rules.list({ libraryId, page: 0, pageSize: 50 })).items.map(
       (r) => r.name,
     );
-  return { call, seedLibrary, rule, names };
+  return { call, seedLibrary: library, rule, names };
 }
 
 describe("rules CRUD", () => {
@@ -46,7 +37,7 @@ describe("rules CRUD", () => {
 
   test("create rejects an unknown library", async () => {
     const { call, rule } = setup();
-    expect(call.rules.create(rule(999 as never, "a"))).rejects.toMatchObject({
+    expect(call.rules.create(rule(unknownId, "a"))).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });
@@ -86,11 +77,11 @@ describe("rules CRUD", () => {
 
   test("update and get of a missing rule return NOT_FOUND", async () => {
     const { call } = setup();
-    expect(call.rules.get({ id: 999 as never })).rejects.toMatchObject({
+    expect(call.rules.get({ id: unknownId })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(
-      call.rules.update({ id: 999 as never, name: "x" }),
+      call.rules.update({ id: unknownId, name: "x" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 

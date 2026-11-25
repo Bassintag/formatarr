@@ -1,23 +1,18 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { files, libraries } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
+import { files, type libraries } from "@/db/schema";
 import { createScanScheduler } from "@/scans/scan.scheduler";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
+import { seedLibrary, unknownId } from "@/testing/seed";
 import { advance } from "@/testing/timers";
 
 async function setup(values: Partial<typeof libraries.$inferInsert> = {}) {
   const context = createTestContext();
   const root = "/media";
   const disk = mockFileSystem({ [join(root, "movie.mkv")]: "12345" });
-  const library = await firstOrThrow(
-    context.db
-      .insert(libraries)
-      .values({ name: "lib", path: root, ...values })
-      .returning(),
-  );
+  const library = seedLibrary(context.db, { path: root, ...values });
   const rows = () =>
     context.db
       .select()
@@ -41,7 +36,7 @@ describe("scan scheduler", () => {
     const { context } = await setup();
     const scheduler = await createScanScheduler(context);
 
-    expect(scheduler.scan(999 as never)).resolves.toBeUndefined();
+    expect(scheduler.scan(unknownId)).resolves.toBeUndefined();
   });
 
   test("watch triggers a debounced scan when files change", async () => {

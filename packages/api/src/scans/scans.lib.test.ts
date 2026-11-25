@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { files, libraries } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
+import { files } from "@/db/schema";
 import { scanLibrary } from "@/scans/scans.lib";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
+import { seedFile, seedLibrary, unknownId } from "@/testing/seed";
 
 async function setup() {
   const context = createTestContext();
@@ -16,12 +16,7 @@ async function setup() {
     [join(root, "notes.txt")]: "text",
     [join(root, "shows", "poster.jpg")]: "img",
   });
-  const library = await firstOrThrow(
-    context.db
-      .insert(libraries)
-      .values({ name: "lib", path: root })
-      .returning({ id: libraries.id }),
-  );
+  const library = seedLibrary(context.db, { path: root });
   const rows = (libraryId = library.id) =>
     context.db.select().from(files).where(eq(files.libraryId, libraryId)).all();
   return { context, root, libraryId: library.id, rows, disk };
@@ -86,22 +81,14 @@ describe("scanLibrary", () => {
 
   test("does not touch other libraries", async () => {
     const { context, libraryId, rows } = await setup();
-    const other = await firstOrThrow(
-      context.db
-        .insert(libraries)
-        .values({ name: "other", path: "/tmp" })
-        .returning({ id: libraries.id }),
-    );
-    context.db
-      .insert(files)
-      .values({ libraryId: other.id, path: "/tmp/x.mkv", size: 1 })
-      .run();
+    const other = seedLibrary(context.db, { name: "other" });
+    seedFile(context.db, other.id, { path: "/tmp/x.mkv" });
     await scanLibrary(context, libraryId);
     expect(rows(other.id)).toHaveLength(1);
   });
 
   test("rejects a missing library", async () => {
     const { context } = await setup();
-    expect(scanLibrary(context, 999 as never)).rejects.toThrow();
+    expect(scanLibrary(context, unknownId)).rejects.toThrow();
   });
 });

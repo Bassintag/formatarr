@@ -1,8 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import { join } from "node:path";
 import { integrations, libraryIntegrations } from "@/db/schema";
-import { createTestCaller } from "@/testing/harness";
+import { createTestCaller, noopScanScheduler } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
+import { unknownId } from "@/testing/seed";
 
 function setup() {
   const { call, db } = createTestCaller();
@@ -50,7 +51,7 @@ describe("libraries CRUD", () => {
       call.libraries.create({
         ...base,
         path: dir,
-        integrations: [{ id: 999 as never }],
+        integrations: [{ id: unknownId }],
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect((await call.libraries.list({ page: 0, pageSize: 10 })).total).toBe(
@@ -124,7 +125,7 @@ describe("libraries CRUD", () => {
 
   test("unknown ids are not found", async () => {
     const { call } = setup();
-    const id = 999 as never;
+    const id = unknownId;
 
     expect(call.libraries.get({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -146,7 +147,7 @@ describe("libraries scan scheduling", () => {
     const update = mock(async () => {});
     const remove = mock(() => {});
     const { call, db } = createTestCaller({
-      schedulers: { scan: { scan: async () => {}, update, remove } },
+      schedulers: { scan: { ...noopScanScheduler, update, remove } },
     });
     const dir = "/media/lib";
     mockFileSystem({ [join(dir, "file.txt")]: "x" });

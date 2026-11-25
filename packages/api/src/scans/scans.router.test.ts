@@ -1,25 +1,14 @@
 import { describe, expect, mock, test } from "bun:test";
-import { libraries } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
-import { createTestCaller } from "@/testing/harness";
+import { createTestCaller, noopScanScheduler } from "@/testing/harness";
+import { seedLibrary, unknownId } from "@/testing/seed";
 
 describe("scans.create", () => {
   test("delegates to the scan scheduler", async () => {
     const scan = mock(async () => {});
     const { call, db } = createTestCaller({
-      schedulers: {
-        scan: { scan, update: async () => {}, remove: () => {} },
-      },
+      schedulers: { scan: { ...noopScanScheduler, scan } },
     });
-    const library = await firstOrThrow(
-      db
-        .insert(libraries)
-        .values({
-          name: "lib",
-          path: "/media",
-        })
-        .returning({ id: libraries.id }),
-    );
+    const library = seedLibrary(db, { path: "/media" });
 
     await call.scans.create({ libraryId: library.id });
 
@@ -29,14 +18,12 @@ describe("scans.create", () => {
   test("rejects unknown libraries", async () => {
     const scan = mock(async () => {});
     const { call } = createTestCaller({
-      schedulers: {
-        scan: { scan, update: async () => {}, remove: () => {} },
-      },
+      schedulers: { scan: { ...noopScanScheduler, scan } },
     });
 
-    expect(
-      call.scans.create({ libraryId: 999 as never }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(call.scans.create({ libraryId: unknownId })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     expect(scan).not.toHaveBeenCalled();
   });
 });

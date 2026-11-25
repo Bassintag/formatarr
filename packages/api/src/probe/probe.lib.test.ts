@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { files, libraries } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
+import { files } from "@/db/schema";
 import { normalizeProbe, probeFiles } from "@/probe/probe.lib";
 import { createTestContext } from "@/testing/harness";
+import { seedLibrary } from "@/testing/seed";
 import { advance } from "@/testing/timers";
 
 const raw = {
@@ -26,12 +26,7 @@ const raw = {
 
 async function setup(count: number) {
   const context = createTestContext();
-  const library = await firstOrThrow(
-    context.db
-      .insert(libraries)
-      .values({ name: "lib", path: "/x" })
-      .returning({ id: libraries.id }),
-  );
+  const library = seedLibrary(context.db, { path: "/x" });
   const ids = context.db
     .insert(files)
     .values(

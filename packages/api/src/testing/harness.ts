@@ -1,31 +1,41 @@
 import { MemoryPublisher } from "@orpc/publisher/memory";
 import { createRouterClient } from "@orpc/server";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
-import type { Context } from "@/context";
+import type { RequestContext } from "@/context";
 import { createDb } from "@/lib/db";
+import { EnvSchema } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { router } from "@/router";
 import { ConfigSchema } from "@/settings/config.schema";
 
-export type TestContext = Context & { request: Request };
+export type TestContext = RequestContext;
+
+export const noopScanScheduler: TestContext["schedulers"]["scan"] = {
+  scan: async () => {},
+  update: async () => {},
+  remove: () => {},
+};
+
+export function createTestDb() {
+  const db = createDb(":memory:");
+  migrate(db, { migrationsFolder: `${import.meta.dir}/../../drizzle` });
+  return db;
+}
 
 export function createTestContext(
   overrides: Partial<TestContext> = {},
 ): TestContext {
-  const db = createDb(":memory:");
-  migrate(db, { migrationsFolder: `${import.meta.dir}/../../drizzle` });
+  const db = createTestDb();
 
   let config = ConfigSchema.parse({});
 
   return {
-    env: {
+    env: EnvSchema.parse({
       API_PORT: 0,
       DATA_DIR: "/data",
       DATABASE_URL: ":memory:",
-      FFPROBE_PATH: "ffprobe",
-      PROBE_CONCURRENCY: 4,
       LOG_LEVEL: "silent",
-    },
+    }),
     db,
     logger: createLogger("silent"),
     settings: {
@@ -48,13 +58,7 @@ export function createTestContext(
         { codec_type: "video", codec_name: "h264", width: 1920, height: 1080 },
       ],
     }),
-    schedulers: {
-      scan: {
-        scan: async () => {},
-        update: async () => {},
-        remove: () => {},
-      },
-    },
+    schedulers: { scan: noopScanScheduler },
     request: new Request("http://localhost"),
     ...overrides,
   };

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import {
   files,
   integrations,
@@ -10,7 +9,7 @@ import {
   rules,
   workers,
 } from "@/db/schema";
-import { createDb } from "@/lib/db";
+import { createTestDb } from "@/testing/harness";
 
 function one<T>(rows: T[]): T {
   const row = rows[0];
@@ -21,9 +20,7 @@ function one<T>(rows: T[]): T {
 }
 
 function setup() {
-  const db = createDb(":memory:");
-  migrate(db, { migrationsFolder: `${import.meta.dir}/../../drizzle` });
-  return db;
+  return createTestDb();
 }
 
 async function seed(db: ReturnType<typeof setup>) {

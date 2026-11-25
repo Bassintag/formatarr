@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { files, libraries } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
+import { seedFile, seedLibrary } from "@/testing/seed";
 
 async function subscribed(stream: AsyncIterator<unknown>) {
   const first = stream.next();
@@ -35,18 +34,8 @@ describe("events.stream", () => {
 
   test("emits file updates", async () => {
     const { call, db } = createTestCaller();
-    const library = await firstOrThrow(
-      db
-        .insert(libraries)
-        .values({ name: "l", path: "/tmp" })
-        .returning({ id: libraries.id }),
-    );
-    const file = await firstOrThrow(
-      db
-        .insert(files)
-        .values({ libraryId: library.id, path: "/a", size: 1 })
-        .returning({ id: files.id }),
-    );
+    const library = seedLibrary(db);
+    const file = seedFile(db, library.id);
     const stream = await call.events.stream();
     const { first } = await subscribed(stream);
 

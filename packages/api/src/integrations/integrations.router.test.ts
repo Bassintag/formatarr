@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { integrations, libraries, libraryIntegrations } from "@/db/schema";
+import { integrations, libraryIntegrations } from "@/db/schema";
 import { createTestCaller } from "@/testing/harness";
+import { seedLibrary, unknownId } from "@/testing/seed";
 
 const API_KEY = "super-secret-api-key-1234";
 
@@ -91,11 +92,7 @@ describe("integrations CRUD", () => {
   test("remove deletes the integration and its library links", async () => {
     const { call, db } = createTestCaller();
     const { id } = await call.integrations.create(input);
-    const [library] = await db
-      .insert(libraries)
-      .values({ name: "movies", path: "/movies" })
-      .returning({ id: libraries.id });
-    if (!library) throw new Error("seed failed");
+    const library = seedLibrary(db);
     await db
       .insert(libraryIntegrations)
       .values({ libraryId: library.id, integrationId: id });
@@ -113,7 +110,7 @@ describe("integrations CRUD", () => {
 
   test("unknown ids are not found", async () => {
     const { call } = createTestCaller();
-    const id = 999 as never;
+    const id = unknownId;
 
     expect(call.integrations.get({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",

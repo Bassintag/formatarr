@@ -1,37 +1,25 @@
 import { describe, expect, test } from "bun:test";
-import { files, libraries } from "@/db/schema";
-import { firstOrThrow } from "@/lib/db";
+import type { FileStatus, LibraryId } from "@formatarr/contract";
 import { createTestCaller } from "@/testing/harness";
+import { seedFile, seedLibrary, unknownId } from "@/testing/seed";
 
 function setup() {
   const { call, db } = createTestCaller();
-  const seedLibrary = (name: string) =>
-    firstOrThrow(
-      db
-        .insert(libraries)
-        .values({ name, path: "/tmp" })
-        .returning({ id: libraries.id }),
-    ).then((row) => row.id);
-  const seedFile = (
-    libraryId: Awaited<ReturnType<typeof seedLibrary>>,
+  const library = (name: string) => seedLibrary(db, { name }).id;
+  const file = (
+    libraryId: LibraryId,
     path: string,
-    status: "pending" | "queued" | "processing" | "done" | "failed" = "pending",
-  ) =>
-    firstOrThrow(
-      db
-        .insert(files)
-        .values({ libraryId, path, size: 1, status })
-        .returning({ id: files.id }),
-    ).then((row) => row.id);
+    status: FileStatus = "pending",
+  ) => seedFile(db, libraryId, { path, status }).id;
   const paths = async (input: {
-    libraryId?: Awaited<ReturnType<typeof seedLibrary>>;
+    libraryId?: LibraryId;
     status?: "pending" | "done";
     search?: string;
   }) =>
     (await call.files.list({ page: 0, pageSize: 50, ...input })).items.map(
       (f) => f.path,
     );
-  return { call, seedLibrary, seedFile, paths };
+  return { call, seedLibrary: library, seedFile: file, paths };
 }
 
 describe("files", () => {
@@ -105,11 +93,11 @@ describe("files", () => {
 
   test("get and update of a missing file return NOT_FOUND", async () => {
     const { call } = setup();
-    expect(call.files.get({ id: 999 as never })).rejects.toMatchObject({
+    expect(call.files.get({ id: unknownId })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
     expect(
-      call.files.update({ id: 999 as never, ignored: true }),
+      call.files.update({ id: unknownId, ignored: true }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

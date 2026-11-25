@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { files, jobs, libraries, rules, workers } from "@/db/schema";
+import { jobs, workers } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
+import { seedFile, seedLibrary, seedRule, unknownId } from "@/testing/seed";
 import { hashWorkerToken } from "@/workers/worker.lib";
 
 const capabilities = { ffmpegVersion: "7.0", hwaccels: ["vaapi"] };
@@ -73,7 +74,7 @@ describe("workers CRUD", () => {
 
   test("unknown ids are not found", async () => {
     const { call } = setup();
-    const id = 999 as never;
+    const id = unknownId;
 
     expect(call.workers.get({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -101,29 +102,9 @@ describe("running jobs", () => {
   test("only running jobs are exposed", async () => {
     const { call, db } = setup();
     const worker = await call.workers.create({ name: "w1", capabilities });
-    const library = await firstOrThrow(
-      db
-        .insert(libraries)
-        .values({ name: "Movies", path: "/movies" })
-        .returning(),
-    );
-    const rule = await firstOrThrow(
-      db
-        .insert(rules)
-        .values({
-          libraryId: library.id,
-          name: "r",
-          conditions: [],
-          actions: [{ type: "setContainer", container: "mkv" }],
-        })
-        .returning(),
-    );
-    const file = await firstOrThrow(
-      db
-        .insert(files)
-        .values({ libraryId: library.id, path: "/movies/a.mkv", size: 1 })
-        .returning(),
-    );
+    const library = seedLibrary(db);
+    const rule = seedRule(db, library.id);
+    const file = seedFile(db, library.id);
     const base = { fileId: file.id, ruleId: rule.id, workerId: worker.id };
     await db.insert(jobs).values({ ...base, status: "queued" });
     const running = await firstOrThrow(

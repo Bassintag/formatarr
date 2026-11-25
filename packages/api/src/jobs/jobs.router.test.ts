@@ -1,43 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { files, jobs, libraries, rules, workers } from "@/db/schema";
+import { jobs } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
+import {
+  seedFile,
+  seedLibrary,
+  seedRule,
+  seedWorker,
+  unknownId,
+} from "@/testing/seed";
 
 function setup() {
   const { call, db } = createTestCaller();
   const seedBase = async () => {
-    const library = await firstOrThrow(
-      db.insert(libraries).values({ name: "l", path: "/tmp" }).returning(),
-    );
-    const rule = await firstOrThrow(
-      db
-        .insert(rules)
-        .values({
-          libraryId: library.id,
-          name: "r",
-          conditions: [],
-          actions: [{ type: "setContainer", container: "mkv" }],
-        })
-        .returning(),
-    );
-    const worker = await firstOrThrow(
-      db
-        .insert(workers)
-        .values({
-          name: "w",
-          tokenHash: "h",
-          capabilities: { ffmpegVersion: "7.0", hwaccels: [] },
-        })
-        .returning(),
-    );
-    const seedFile = (path: string) =>
-      firstOrThrow(
-        db
-          .insert(files)
-          .values({ libraryId: library.id, path, size: 1 })
-          .returning(),
-      );
-    return { rule, worker, seedFile };
+    const library = seedLibrary(db);
+    const rule = seedRule(db, library.id);
+    const worker = seedWorker(db);
+    const file = (path: string) => seedFile(db, library.id, { path });
+    return { rule, worker, seedFile: file };
   };
   return { call, db, seedBase };
 }
@@ -123,7 +103,7 @@ describe("jobs", () => {
 
   test("get of a missing job returns NOT_FOUND", async () => {
     const { call } = setup();
-    expect(call.jobs.get({ id: 999 as never })).rejects.toMatchObject({
+    expect(call.jobs.get({ id: unknownId })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
