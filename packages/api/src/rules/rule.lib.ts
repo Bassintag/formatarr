@@ -118,6 +118,44 @@ export async function createJobsForFiles(
   return createdJobs.length;
 }
 
+export async function reevaluateLibrary(
+  context: EngineContext,
+  libraryId: LibraryId,
+) {
+  const { db, events } = context;
+
+  const { ids, reset } = db.transaction((tx) => {
+    const candidates = tx
+      .select({ id: files.id, status: files.status })
+      .from(files)
+      .where(
+        and(
+          eq(files.libraryId, libraryId),
+          inArray(files.status, ["pending", "done"]),
+          eq(files.ignored, false),
+          isNotNull(files.mediaInfo),
+        ),
+      )
+      .all();
+    const reset = candidates
+      .filter((file) => file.status === "done")
+      .map((file) => file.id);
+    for (let start = 0; start < reset.length; start += JOB_CHUNK_SIZE) {
+      tx.update(files)
+        .set({ status: "pending" })
+        .where(inArray(files.id, reset.slice(start, start + JOB_CHUNK_SIZE)))
+        .run();
+    }
+    return { ids: candidates.map((file) => file.id), reset };
+  });
+
+  for (const id of reset) {
+    await events.publish("event", { resource: "file", change: "updated", id });
+  }
+
+  return createJobsForFiles(context, ids);
+}
+
 function onlyAllowed(tracks: { language: string | null }[], allowed: string[]) {
   return tracks.every(
     ({ language }) => language === null || allowed.includes(language),

@@ -9,7 +9,7 @@ import {
   toPage,
 } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { assertLibraryExists } from "@/rules/rule.lib";
+import { assertLibraryExists, reevaluateLibrary } from "@/rules/rule.lib";
 import { ruleOptions } from "@/rules/rule.options";
 
 const list = orpc.rules.list.handler(({ context, input }) => {
@@ -35,11 +35,12 @@ const list = orpc.rules.list.handler(({ context, input }) => {
   return { ...page, items: page.items as Rule[] };
 });
 
-const create = orpc.rules.create.handler(({ context, input }) => {
+const create = orpc.rules.create.handler(async ({ context, input }) => {
   const { id } = context.db.transaction((tx) => {
     assertLibraryExists(tx, input.libraryId);
     return tx.insert(rules).values(input).returning({ id: rules.id }).get();
   });
+  await reevaluateLibrary(context, input.libraryId);
   return orThrow(
     context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }).sync(),
   ) as Rule;
@@ -56,29 +57,31 @@ const get = orpc.rules.get.handler(({ context, input }) => {
   ) as Rule;
 });
 
-const set = orpc.rules.set.handler(({ context, input }) => {
+const set = orpc.rules.set.handler(async ({ context, input }) => {
   const { id, ...values } = input;
-  firstOrThrow(
+  const { libraryId } = firstOrThrow(
     context.db
       .update(rules)
       .set(values)
       .where(eq(rules.id, id))
-      .returning({ id: rules.id })
+      .returning({ libraryId: rules.libraryId })
       .all(),
   );
+  await reevaluateLibrary(context, libraryId);
   return orThrow(
     context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }).sync(),
   ) as Rule;
 });
 
-const remove = orpc.rules.remove.handler(({ context, input }) => {
-  firstOrThrow(
+const remove = orpc.rules.remove.handler(async ({ context, input }) => {
+  const { libraryId } = firstOrThrow(
     context.db
       .delete(rules)
       .where(eq(rules.id, input.id))
-      .returning({ id: rules.id })
+      .returning({ libraryId: rules.libraryId })
       .all(),
   );
+  await reevaluateLibrary(context, libraryId);
 });
 
 export const rulesRouter = orpc.rules.router({
