@@ -3,7 +3,11 @@ import { count, eq } from "drizzle-orm";
 import { libraries } from "@/db/schema";
 import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { assertDirectory, setIntegrations } from "@/libraries/library.lib";
+import {
+  assertCron,
+  assertDirectory,
+  setIntegrations,
+} from "@/libraries/library.lib";
 import { libraryOptions } from "./library.options";
 
 const list = orpc.libraries.list.handler(async ({ context, input }) => {
@@ -18,6 +22,7 @@ const list = orpc.libraries.list.handler(async ({ context, input }) => {
 
 const create = orpc.libraries.create.handler(async ({ context, input }) => {
   await assertDirectory(input.path);
+  assertCron(input.scanCron);
   const { integrations, ...values } = input;
   const id = context.db.transaction((tx) => {
     const { lastInsertRowid } = tx.insert(libraries).values(values).run();
@@ -25,12 +30,14 @@ const create = orpc.libraries.create.handler(async ({ context, input }) => {
     setIntegrations(tx, libraryId, integrations);
     return libraryId;
   });
-  return orThrow(
+  const created = await orThrow(
     context.db.query.libraries.findFirst({
       ...libraryOptions,
       where: { id },
     }),
   );
+  context.schedulers.scan.update(created);
+  return created;
 });
 
 const get = orpc.libraries.get.handler(({ context, input }) =>
@@ -45,6 +52,7 @@ const get = orpc.libraries.get.handler(({ context, input }) =>
 const update = orpc.libraries.update.handler(async ({ context, input }) => {
   const { id, integrations, ...changes } = input;
   if (changes.path !== undefined) await assertDirectory(changes.path);
+  assertCron(changes.scanCron);
   await orThrow(
     context.db.query.libraries.findFirst({
       columns: { id: true },
@@ -59,21 +67,24 @@ const update = orpc.libraries.update.handler(async ({ context, input }) => {
       setIntegrations(tx, id, integrations);
     }
   });
-  return orThrow(
+  const updated = await orThrow(
     context.db.query.libraries.findFirst({
       ...libraryOptions,
       where: { id },
     }),
   );
+  context.schedulers.scan.update(updated);
+  return updated;
 });
 
 const remove = orpc.libraries.remove.handler(async ({ context, input }) => {
-  await firstOrThrow(
+  const removed = await firstOrThrow(
     context.db
       .delete(libraries)
       .where(eq(libraries.id, input.id))
       .returning({ id: libraries.id }),
   );
+  context.schedulers.scan.remove(removed.id);
 });
 
 export const librariesRouter = orpc.libraries.router({

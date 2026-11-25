@@ -43,6 +43,13 @@ export function createTestContext(
         { codec_type: "video", codec_name: "h264", width: 1920, height: 1080 },
       ],
     }),
+    schedulers: {
+      scan: {
+        scan: async () => {},
+        update: async () => {},
+        remove: () => {},
+      },
+    },
     request: new Request("http://localhost"),
     ...overrides,
   };

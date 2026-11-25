@@ -3,7 +3,7 @@ import { PinoHandlerPlugin } from "@orpc/pino";
 import { createContext } from "@/context";
 import { router } from "@/router";
 
-const context = createContext();
+const context = await createContext();
 
 const handler = new OpenAPIHandler(router, {
   plugins: [new PinoHandlerPlugin({ logger: context.logger })],

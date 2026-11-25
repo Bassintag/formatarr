@@ -6,6 +6,8 @@ export const libraryOptions = {
     name: true,
     path: true,
     enabled: true,
+    scanCron: true,
+    watch: true,
   },
   with: {
     integrations: {

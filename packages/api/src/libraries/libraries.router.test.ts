@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -139,5 +139,106 @@ describe("libraries CRUD", () => {
     expect(call.libraries.remove({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+});
+
+describe("libraries scan scheduling", () => {
+  function setupScheduler() {
+    const update = mock(async () => {});
+    const remove = mock(() => {});
+    const { call, db } = createTestCaller({
+      schedulers: { scan: { scan: async () => {}, update, remove } },
+    });
+    const dir = mkdtempSync(join(tmpdir(), "formatarr-lib-"));
+    return { call, db, dir, update, remove };
+  }
+
+  test("scanCron and watch default to null and false", async () => {
+    const { call, dir } = setupScheduler();
+    const created = await call.libraries.create({
+      name: "movies",
+      path: dir,
+      enabled: true,
+      integrations: [],
+    });
+    expect(created.scanCron).toBeNull();
+    expect(created.watch).toBe(false);
+  });
+
+  test("create and update persist scheduling and notify the scheduler", async () => {
+    const { call, dir, update } = setupScheduler();
+    const created = await call.libraries.create({
+      name: "movies",
+      path: dir,
+      enabled: true,
+      scanCron: "*/5 * * * *",
+      watch: true,
+      integrations: [],
+    });
+    expect(created.scanCron).toBe("*/5 * * * *");
+    expect(created.watch).toBe(true);
+    expect(update).toHaveBeenCalledTimes(1);
+
+    const updated = await call.libraries.update({
+      id: created.id,
+      scanCron: null,
+      watch: false,
+    });
+    expect(updated.scanCron).toBeNull();
+    expect(updated.watch).toBe(false);
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  test("update without scheduling fields keeps them", async () => {
+    const { call, dir } = setupScheduler();
+    const created = await call.libraries.create({
+      name: "movies",
+      path: dir,
+      enabled: true,
+      scanCron: "*/5 * * * *",
+      watch: true,
+      integrations: [],
+    });
+    const renamed = await call.libraries.update({
+      id: created.id,
+      name: "films",
+    });
+    expect(renamed.scanCron).toBe("*/5 * * * *");
+    expect(renamed.watch).toBe(true);
+  });
+
+  test("invalid cron expressions are rejected", async () => {
+    const { call, dir, update } = setupScheduler();
+    expect(
+      call.libraries.create({
+        name: "movies",
+        path: dir,
+        enabled: true,
+        scanCron: "nope",
+        integrations: [],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const created = await call.libraries.create({
+      name: "movies",
+      path: dir,
+      enabled: true,
+      integrations: [],
+    });
+    expect(
+      call.libraries.update({ id: created.id, scanCron: "nope" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  test("remove unschedules the library", async () => {
+    const { call, dir, remove } = setupScheduler();
+    const created = await call.libraries.create({
+      name: "movies",
+      path: dir,
+      enabled: true,
+      integrations: [],
+    });
+    await call.libraries.remove({ id: created.id });
+    expect(remove).toHaveBeenCalledWith(created.id);
   });
 });

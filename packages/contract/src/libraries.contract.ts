@@ -14,11 +14,18 @@ export const LibrarySchema = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
   enabled: z.boolean(),
+  scanCron: z.string().min(1).nullable(),
+  watch: z.boolean(),
   integrations: z.array(z.object({ id: IntegrationIdSchema })),
 });
 export type Library = z.infer<typeof LibrarySchema>;
 
-export const CreateLibraryInputSchema = LibrarySchema.omit({ id: true });
+export const CreateLibraryInputSchema = LibrarySchema.omit({
+  id: true,
+}).extend({
+  scanCron: LibrarySchema.shape.scanCron.optional(),
+  watch: LibrarySchema.shape.watch.optional(),
+});
 export type CreateLibraryInput = z.infer<typeof CreateLibraryInputSchema>;
 
 export const librariesContract = orpc
