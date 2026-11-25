@@ -111,15 +111,18 @@ describe("jobs", () => {
     const drop = seedRule(db, library.id, { type: "maxBitrate", value: 1 });
     const job = seedJob(db, file.id, [keep.id, drop.id]);
 
-    await call.rules.remove({ id: drop.id });
+    await call.libraries.update({
+      id: library.id,
+      rules: [{ enabled: true, type: "container", value: "mkv" }],
+    });
 
     expect(
       (await call.jobs.get({ id: job.id })).rules.map((r) => r.id),
     ).toEqual([keep.id]);
     await call.jobs.remove({ id: job.id });
-    expect(await call.rules.get({ id: keep.id })).toMatchObject({
-      id: keep.id,
-    });
+    expect(
+      (await call.libraries.get({ id: library.id })).rules.map((r) => r.id),
+    ).toEqual([keep.id]);
   });
 
   test("get of a missing job returns NOT_FOUND", async () => {

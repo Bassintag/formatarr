@@ -8,7 +8,7 @@ import {
 } from "./common.contract";
 import { FileIdSchema, JobIdSchema, WorkerIdSchema } from "./ids";
 import { orpc } from "./orpc";
-import { RuleSchema } from "./rules.contract";
+import { RuleSchema } from "./rule.contract";
 
 export const JobStatusSchema = z.enum([
   "queued",

@@ -9,7 +9,7 @@ export * from "./integration.contract";
 export * from "./job.contract";
 export * from "./library.contract";
 export * from "./orpc";
-export * from "./rules.contract";
+export * from "./rule.contract";
 export * from "./scan.contract";
 export * from "./settings.contract";
 export * from "./worker.contract";

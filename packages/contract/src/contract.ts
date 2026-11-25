@@ -7,7 +7,6 @@ import { integrationsContract } from "./integration.contract";
 import { jobsContract } from "./job.contract";
 import { librariesContract } from "./library.contract";
 import { orpc } from "./orpc";
-import { rulesContract } from "./rules.contract";
 import { scansContract } from "./scan.contract";
 import { settingsContract } from "./settings.contract";
 import { workersContract } from "./worker.contract";
@@ -16,7 +15,6 @@ export const contract = orpc.router({
   health: healthContract,
   auth: authContract,
   libraries: librariesContract,
-  rules: rulesContract,
   scans: scansContract,
   files: filesContract,
   jobs: jobsContract,

@@ -1,9 +1,30 @@
 import { describe, expect, mock, test } from "bun:test";
 import { join } from "node:path";
-import { integrations, libraryIntegrations } from "@/db/schema";
+import type {
+  FileId,
+  FileStatus,
+  LibraryRule,
+  MediaInfo,
+  RuleType,
+} from "@formatarr/contract";
+import { eq } from "drizzle-orm";
+import {
+  files,
+  integrations,
+  jobRules,
+  jobs,
+  libraryIntegrations,
+  rules,
+} from "@/db/schema";
 import { createTestCaller, noopScanScheduler } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
-import { unknownId } from "@/testing/seed";
+import {
+  seedFile,
+  seedJob,
+  seedLibrary,
+  seedRule,
+  unknownId,
+} from "@/testing/seed";
 
 function setup() {
   const { call, db } = createTestCaller();
@@ -241,5 +262,241 @@ describe("libraries scan scheduling", () => {
     });
     await call.libraries.remove({ id: created.id });
     expect(remove).toHaveBeenCalledWith(created.id);
+  });
+});
+
+const mediaInfo: MediaInfo = {
+  container: "matroska",
+  durationSeconds: 100,
+  bitrate: 5000,
+  video: { codec: "h264", width: 1920, height: 1080 },
+  audio: [{ codec: "aac", language: "eng", channels: 2 }],
+  subtitles: [],
+};
+
+const sample: Record<RuleType, LibraryRule> = {
+  container: { enabled: true, type: "container", value: "mkv" },
+  videoCodec: { enabled: true, type: "videoCodec", value: "hevc" },
+  maxResolution: { enabled: true, type: "maxResolution", value: 1080 },
+  maxBitrate: { enabled: true, type: "maxBitrate", value: 8000 },
+  audioCodec: { enabled: true, type: "audioCodec", value: "aac" },
+  audioLanguages: { enabled: true, type: "audioLanguages", value: ["eng"] },
+  subtitleLanguages: {
+    enabled: true,
+    type: "subtitleLanguages",
+    value: ["eng"],
+  },
+};
+
+describe("libraries rules", () => {
+  function harness() {
+    const { call, db } = createTestCaller();
+    const library = seedLibrary(db, { name: "movies" }).id;
+    const file = (status: FileStatus, values = {}) =>
+      seedFile(db, library, { status, mediaInfo, ...values }).id;
+    const statusOf = (id: FileId) =>
+      db.select().from(files).where(eq(files.id, id)).get()?.status;
+    const jobCount = () => db.select().from(jobs).all().length;
+    const types = async () =>
+      (await call.libraries.get({ id: library })).rules.map((r) => r.type);
+    return { call, db, library, file, statusOf, jobCount, types };
+  }
+
+  test("create embeds the given rules and defaults to none", async () => {
+    const { call } = createTestCaller();
+    mockFileSystem({ "/media/lib/file.txt": "x" });
+    const base = {
+      name: "m",
+      path: "/media/lib",
+      enabled: true,
+      integrations: [],
+    };
+
+    const empty = await call.libraries.create(base);
+    const created = await call.libraries.create({
+      ...base,
+      rules: [sample.container, sample.maxBitrate],
+    });
+
+    expect(empty.rules).toEqual([]);
+    expect(created.rules.map((r) => r.type)).toEqual([
+      "container",
+      "maxBitrate",
+    ]);
+    expect(created.rules[0]).toMatchObject({
+      libraryId: created.id,
+      enabled: true,
+      value: "mkv",
+    });
+  });
+
+  test("create and update reject duplicate rule types", async () => {
+    const { call, library } = harness();
+    mockFileSystem({ "/media/lib/file.txt": "x" });
+
+    expect(
+      call.libraries.create({
+        name: "m",
+        path: "/media/lib",
+        enabled: true,
+        integrations: [],
+        rules: [sample.container, sample.container],
+      }),
+    ).rejects.toThrow();
+    expect(
+      call.libraries.update({
+        id: library,
+        rules: [sample.container, sample.container],
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("update replaces rules and keeps ids of unchanged types", async () => {
+    const { call, library, types } = harness();
+    const first = await call.libraries.update({
+      id: library,
+      rules: [sample.container, sample.maxBitrate],
+    });
+    const [container, bitrate] = first.rules;
+
+    const second = await call.libraries.update({
+      id: library,
+      rules: [
+        { ...sample.maxBitrate, value: 1000, enabled: false },
+        sample.videoCodec,
+      ],
+    });
+
+    expect(await types()).toEqual(["maxBitrate", "videoCodec"]);
+    expect(second.rules[0]).toMatchObject({
+      id: bitrate?.id,
+      enabled: false,
+      value: 1000,
+    });
+    expect(second.rules.map((r) => r.id)).not.toContain(container?.id);
+
+    const cleared = await call.libraries.update({ id: library, rules: [] });
+    expect(cleared.rules).toEqual([]);
+  });
+
+  test("update without rules keeps them and does not re-evaluate", async () => {
+    const { call, library, file, statusOf, jobCount } = harness();
+    await call.libraries.update({ id: library, rules: [sample.container] });
+    const id = file("done");
+
+    const renamed = await call.libraries.update({ id: library, name: "films" });
+
+    expect(renamed.rules).toHaveLength(1);
+    expect(statusOf(id)).toBe("done");
+    expect(jobCount()).toBe(0);
+  });
+
+  test("update keeps job rules of unchanged types and drops removed ones", async () => {
+    const { call, db, library, file } = harness();
+    const keep = seedRule(db, library, { type: "container", value: "mkv" });
+    const drop = seedRule(db, library, { type: "maxBitrate", value: 1 });
+    const job = seedJob(db, file("queued"), [keep.id, drop.id]);
+
+    await call.libraries.update({ id: library, rules: [sample.container] });
+
+    expect(
+      db.select().from(jobRules).where(eq(jobRules.jobId, job.id)).all(),
+    ).toMatchObject([{ ruleId: keep.id }]);
+    expect(
+      db
+        .select()
+        .from(rules)
+        .all()
+        .map((r) => r.id),
+    ).toEqual([keep.id]);
+  });
+
+  test("update queues unmet pending and done files", async () => {
+    const { call, library, file, statusOf, jobCount } = harness();
+    const pending = file("pending");
+    const done = file("done");
+
+    await call.libraries.update({ id: library, rules: [sample.container] });
+
+    expect(statusOf(pending)).toBe("queued");
+    expect(statusOf(done)).toBe("queued");
+    expect(jobCount()).toBe(2);
+  });
+
+  test("update leaves satisfied files done", async () => {
+    const { call, library, file, statusOf, jobCount } = harness();
+    const pending = file("pending");
+    const done = file("done");
+
+    await call.libraries.update({
+      id: library,
+      rules: [{ enabled: true, type: "container", value: "matroska" }],
+    });
+
+    expect(statusOf(pending)).toBe("done");
+    expect(statusOf(done)).toBe("done");
+    expect(jobCount()).toBe(0);
+  });
+
+  test("update re-evaluates against changed values, disabled and removed rules", async () => {
+    const { call, library, file, statusOf, jobCount } = harness();
+    await call.libraries.update({
+      id: library,
+      rules: [{ enabled: true, type: "maxBitrate", value: 8000 }],
+    });
+    const id = file("pending");
+    await call.libraries.update({ id: library, rules: [sample.maxBitrate] });
+    expect(statusOf(id)).toBe("done");
+
+    await call.libraries.update({
+      id: library,
+      rules: [{ enabled: true, type: "maxBitrate", value: 1000 }],
+    });
+    expect(statusOf(id)).toBe("queued");
+    expect(jobCount()).toBe(1);
+
+    const other = file("done");
+    await call.libraries.update({ id: library, rules: [] });
+    expect(statusOf(other)).toBe("done");
+  });
+
+  test("disabled rules send pending files straight to done", async () => {
+    const { call, library, file, statusOf } = harness();
+    const id = file("pending");
+
+    await call.libraries.update({
+      id: library,
+      rules: [{ ...sample.container, enabled: false }],
+    });
+
+    expect(statusOf(id)).toBe("done");
+  });
+
+  test("queued, processing, ignored and unprobed files are untouched", async () => {
+    const { call, library, file, statusOf, jobCount } = harness();
+    const queued = file("queued");
+    const processing = file("processing");
+    const ignored = file("done", { ignored: true });
+    const unprobed = file("pending", { mediaInfo: null });
+
+    await call.libraries.update({ id: library, rules: [sample.container] });
+
+    expect(statusOf(queued)).toBe("queued");
+    expect(statusOf(processing)).toBe("processing");
+    expect(statusOf(ignored)).toBe("done");
+    expect(statusOf(unprobed)).toBe("pending");
+    expect(jobCount()).toBe(0);
+  });
+
+  test("other libraries are not re-evaluated", async () => {
+    const { call, db, library } = harness();
+    const other = seedLibrary(db, { name: "other" }).id;
+    const id = seedFile(db, other, { status: "done", mediaInfo }).id;
+
+    await call.libraries.update({ id: library, rules: [sample.container] });
+
+    expect(db.select().from(files).where(eq(files.id, id)).get()?.status).toBe(
+      "done",
+    );
   });
 });
