@@ -8,7 +8,7 @@ import {
   assertDirectory,
   setIntegrations,
 } from "@/libraries/library.lib";
-import { libraryOptions } from "./library.options";
+import { libraryOptions } from "@/libraries/library.options";
 
 const list = orpc.libraries.list.handler(async ({ context, input }) => {
   return toPage(

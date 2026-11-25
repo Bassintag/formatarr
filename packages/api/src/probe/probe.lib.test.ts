@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { files, libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
+import { normalizeProbe, probeFiles } from "@/probe/probe.lib";
 import { createTestContext } from "@/testing/harness";
 import { advance } from "@/testing/timers";
-import { normalizeProbe, probeFiles } from "./probe.lib";
 
 const raw = {
   format: { format_name: "matroska,webm", duration: "12.5", bit_rate: "4000" },

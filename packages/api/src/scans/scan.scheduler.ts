@@ -2,7 +2,7 @@ import fs, { type FSWatcher } from "node:fs";
 import type { Library, LibraryId } from "@formatarr/contract";
 import { debounce } from "es-toolkit";
 import type { PrimitiveContext } from "@/context";
-import { scanLibrary } from "./scans.lib";
+import { scanLibrary } from "@/scans/scans.lib";
 
 type ScheduledLibrary = Pick<
   Library,
@@ -11,7 +11,7 @@ type ScheduledLibrary = Pick<
 
 type Handle = { cron?: Bun.CronJob; watcher?: FSWatcher };
 
-export const WATCH_DEBOUNCE_MS = 5000;
+const WATCH_DEBOUNCE_MS = 5000;
 
 export async function createScanScheduler(
   context: PrimitiveContext,

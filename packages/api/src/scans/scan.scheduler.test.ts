@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { files, libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
+import { createScanScheduler } from "@/scans/scan.scheduler";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
 import { advance } from "@/testing/timers";
-import { createScanScheduler } from "./scan.scheduler";
 
 async function setup(values: Partial<typeof libraries.$inferInsert> = {}) {
   const context = createTestContext();

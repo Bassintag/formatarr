@@ -7,8 +7,8 @@ import type { RequestContext } from "@/context";
 import { workers } from "@/db/schema";
 import { hashWorkerToken } from "@/workers/worker.lib";
 
-export type AuthUser = { username: string };
-export type AuthWorker = { id: number };
+type AuthUser = { username: string };
+type AuthWorker = { id: number };
 
 function safeEqual(a: string, b: string) {
   const left = Buffer.from(a);

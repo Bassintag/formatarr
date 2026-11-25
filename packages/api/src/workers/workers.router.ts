@@ -4,7 +4,7 @@ import { workers } from "@/db/schema";
 import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 import { generateWorkerToken, hashWorkerToken } from "@/workers/worker.lib";
-import { workerOptions } from "./worker.options";
+import { workerOptions } from "@/workers/worker.options";
 
 const list = orpc.workers.list.handler(async ({ context, input }) => {
   return toPage(

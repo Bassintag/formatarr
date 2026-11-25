@@ -10,16 +10,16 @@ import type {
 import { eq } from "drizzle-orm";
 import { files, jobs, libraries, rules } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
-import { scanLibrary } from "@/scans/scans.lib";
-import { createTestContext } from "@/testing/harness";
-import { mockFileSystem } from "@/testing/memory-fs";
 import {
   createJobsForFiles,
   evaluateCondition,
   findMatchingRule,
   getFieldValues,
   matchRule,
-} from "./rule.lib";
+} from "@/rules/rule.lib";
+import { scanLibrary } from "@/scans/scans.lib";
+import { createTestContext } from "@/testing/harness";
+import { mockFileSystem } from "@/testing/memory-fs";
 
 const mediaInfo: MediaInfo = {
   container: "matroska",

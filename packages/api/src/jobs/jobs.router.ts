@@ -1,9 +1,9 @@
 import { ORPCError } from "@orpc/server";
 import { and, count, eq, type SQL, sql } from "drizzle-orm";
 import { jobs } from "@/db/schema";
+import { jobOptions } from "@/jobs/job.options";
 import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { jobOptions } from "./job.options";
 
 const list = orpc.jobs.list.handler(async ({ context, input }) => {
   function where(table: typeof jobs) {

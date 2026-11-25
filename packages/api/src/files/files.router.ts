@@ -1,8 +1,8 @@
 import { and, count, eq, like, type SQL, sql } from "drizzle-orm";
 import { files } from "@/db/schema";
+import { fileOptions } from "@/files/file.options";
 import { orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { fileOptions } from "./file.options";
 
 const list = orpc.files.list.handler(async ({ context, input }) => {
   function where(table: typeof files) {

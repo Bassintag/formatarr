@@ -1,5 +1,4 @@
-import type { ApiClient } from "@formatarr/contract";
-import { contract } from "@formatarr/contract";
+import { type ApiClient, contract } from "@formatarr/contract";
 import { createORPCClient } from "@orpc/client";
 import { OpenAPILink } from "@orpc/openapi/fetch";
 

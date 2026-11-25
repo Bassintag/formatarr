@@ -1,4 +1,4 @@
-import z from "zod";
+import { z } from "zod";
 
 export function createEnv() {
   const EnvSchema = z.object({
@@ -14,5 +14,3 @@ export function createEnv() {
 
   return EnvSchema.parse(Bun.env);
 }
-
-export type Env = ReturnType<typeof createEnv>;

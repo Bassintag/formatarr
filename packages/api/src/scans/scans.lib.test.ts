@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { files, libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
+import { scanLibrary } from "@/scans/scans.lib";
 import { createTestContext } from "@/testing/harness";
 import { mockFileSystem } from "@/testing/memory-fs";
-import { scanLibrary } from "./scans.lib";
 
 async function setup() {
   const context = createTestContext();

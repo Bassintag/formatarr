@@ -1,8 +1,8 @@
 import { count, eq } from "drizzle-orm";
 import { integrations } from "@/db/schema";
+import { integrationOptions } from "@/integrations/integration.options";
 import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { integrationOptions } from "./integration.options";
 
 const list = orpc.integrations.list.handler(({ context, input }) =>
   toPage(

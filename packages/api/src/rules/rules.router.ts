@@ -3,8 +3,8 @@ import { count, eq, sql } from "drizzle-orm";
 import { rules } from "@/db/schema";
 import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { assertLibraryExists } from "./rule.lib";
-import { ruleOptions } from "./rule.options";
+import { assertLibraryExists } from "@/rules/rule.lib";
+import { ruleOptions } from "@/rules/rule.options";
 
 const list = orpc.rules.list.handler(async ({ context, input }) => {
   function where(table: typeof rules) {

@@ -1,6 +1,6 @@
 import { jwtVerify, SignJWT } from "jose";
 
-export type TokenType = "access" | "refresh";
+type TokenType = "access" | "refresh";
 
 const LIFETIMES: Record<TokenType, string> = {
   access: "15m",
@@ -11,7 +11,7 @@ function key(secret: string) {
   return new TextEncoder().encode(secret);
 }
 
-export function signToken(type: TokenType, username: string, secret: string) {
+function signToken(type: TokenType, username: string, secret: string) {
   return new SignJWT({ typ: type })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(username)
