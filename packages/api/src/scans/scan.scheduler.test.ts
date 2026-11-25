@@ -1,17 +1,17 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { files, libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestContext } from "@/testing/harness";
+import { mockFileSystem } from "@/testing/memory-fs";
+import { advance } from "@/testing/timers";
 import { createScanScheduler } from "./scan.scheduler";
 
 async function setup(values: Partial<typeof libraries.$inferInsert> = {}) {
   const context = createTestContext();
-  const root = mkdtempSync(join(tmpdir(), "formatarr-sched-"));
-  await Bun.write(join(root, "movie.mkv"), "12345");
+  const root = "/media";
+  const disk = mockFileSystem({ [join(root, "movie.mkv")]: "12345" });
   const library = await firstOrThrow(
     context.db
       .insert(libraries)
@@ -24,15 +24,7 @@ async function setup(values: Partial<typeof libraries.$inferInsert> = {}) {
       .from(files)
       .where(eq(files.libraryId, library.id))
       .all();
-  return { context, root, library, rows };
-}
-
-async function waitFor(check: () => boolean, timeoutMs = 3000) {
-  const start = Date.now();
-  while (!check()) {
-    if (Date.now() - start > timeoutMs) throw new Error("timeout");
-    await Bun.sleep(20);
-  }
+  return { context, root, library, rows, disk };
 }
 
 describe("scan scheduler", () => {
@@ -52,37 +44,45 @@ describe("scan scheduler", () => {
     expect(scheduler.scan(999 as never)).resolves.toBeUndefined();
   });
 
-  test("watch triggers a scan when files change", async () => {
-    const { context, library, root, rows } = await setup({ watch: true });
+  test("watch triggers a debounced scan when files change", async () => {
+    const { context, library, root, rows, disk } = await setup({ watch: true });
     const scheduler = await createScanScheduler(context, { debounceMs: 50 });
 
-    await Bun.write(join(root, "other.mkv"), "123");
+    disk.write(join(root, "other.mkv"), "123");
+    disk.changed(root);
+    disk.changed(root);
+    await advance(49);
+    expect(rows()).toHaveLength(0);
+    await advance(1);
 
-    await waitFor(() => rows().length === 2);
+    expect(rows()).toHaveLength(2);
     scheduler.remove(library.id);
   });
 
   test("remove stops the watcher", async () => {
-    const { context, library, root, rows } = await setup({ watch: true });
+    const { context, library, root, rows, disk } = await setup({ watch: true });
     const scheduler = await createScanScheduler(context, { debounceMs: 50 });
+    expect(disk.activeWatchers(root)).toBe(1);
 
     scheduler.remove(library.id);
-    await Bun.write(join(root, "other.mkv"), "123");
-    await Bun.sleep(300);
+    disk.changed(root);
+    await advance(100);
 
+    expect(disk.activeWatchers(root)).toBe(0);
     expect(rows()).toHaveLength(0);
   });
 
   test("disabled libraries are not watched", async () => {
-    const { context, library, root, rows } = await setup({
+    const { context, library, root, rows, disk } = await setup({
       watch: true,
       enabled: false,
     });
     const scheduler = await createScanScheduler(context, { debounceMs: 50 });
     await scheduler.update(library);
 
-    await Bun.write(join(root, "other.mkv"), "123");
-    await Bun.sleep(300);
+    expect(disk.activeWatchers(root)).toBe(0);
+    disk.changed(root);
+    await advance(100);
 
     expect(rows()).toHaveLength(0);
   });

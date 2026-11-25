@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import fsp from "node:fs/promises";
 import type { IntegrationId, LibraryId } from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
 import { eq, inArray } from "drizzle-orm";
@@ -6,7 +6,7 @@ import { integrations, libraryIntegrations } from "@/db/schema";
 import type { Tx } from "@/lib/db";
 
 export async function assertDirectory(path: string) {
-  const info = await stat(path).catch(() => null);
+  const info = await fsp.stat(path).catch(() => null);
   if (!info?.isDirectory()) {
     throw new ORPCError("BAD_REQUEST", {
       message: `Path is not an existing directory: ${path}`,

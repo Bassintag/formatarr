@@ -1,7 +1,16 @@
-import { expect, test } from "bun:test";
+import { beforeEach, expect, spyOn, test } from "bun:test";
 import { createTestCaller } from "@/testing/harness";
 
 const credentials = { username: "admin", password: "hunter2" };
+
+beforeEach(() => {
+  spyOn(Bun.password, "hash").mockImplementation(
+    async (password) => `hash:${password}`,
+  );
+  spyOn(Bun.password, "verify").mockImplementation(
+    async (password, hash) => hash === `hash:${password}`,
+  );
+});
 
 function bearer(token: string) {
   return new Request("http://localhost", {

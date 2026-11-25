@@ -1,7 +1,4 @@
 import { describe, expect, mock, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
@@ -19,7 +16,7 @@ describe("scans.create", () => {
         .insert(libraries)
         .values({
           name: "lib",
-          path: mkdtempSync(join(tmpdir(), "formatarr-scan-")),
+          path: "/media",
         })
         .returning({ id: libraries.id }),
     );
