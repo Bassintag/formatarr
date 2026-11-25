@@ -4,7 +4,9 @@ import { JobSchema, JobUpdateSchema } from "./job.contract";
 const job = {
   id: 1,
   fileId: 2,
-  ruleId: 3,
+  rules: [
+    { id: 3, libraryId: 1, enabled: true, type: "maxBitrate", value: 8000 },
+  ],
   status: "running",
   workerId: null,
   progress: 42,

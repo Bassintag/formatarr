@@ -1,3 +1,4 @@
+import type { Job } from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
 import { count, eq, type SQL } from "drizzle-orm";
 import { jobs } from "@/db/schema";
@@ -26,7 +27,7 @@ const list = orpc.jobs.list.handler(async ({ context, input }) => {
     return buildWhere(conditions);
   }
 
-  return toPage(
+  const page = await toPage(
     context.db.query.jobs.findMany({
       ...jobOptions,
       where: { RAW: where },
@@ -35,6 +36,7 @@ const list = orpc.jobs.list.handler(async ({ context, input }) => {
     }),
     context.db.select({ total: count() }).from(jobs).where(where(jobs)),
   );
+  return { ...page, items: page.items as Job[] };
 });
 
 const create = orpc.jobs.create.handler(() => {
@@ -42,13 +44,14 @@ const create = orpc.jobs.create.handler(() => {
   throw new ORPCError("NOT_IMPLEMENTED");
 });
 
-const get = orpc.jobs.get.handler(({ context, input }) =>
-  orThrow(
-    context.db.query.jobs.findFirst({
-      ...jobOptions,
-      where: { id: input.id },
-    }),
-  ),
+const get = orpc.jobs.get.handler(
+  async ({ context, input }) =>
+    (await orThrow(
+      context.db.query.jobs.findFirst({
+        ...jobOptions,
+        where: { id: input.id },
+      }),
+    )) as Job,
 );
 
 const update = orpc.jobs.update.handler(() => {

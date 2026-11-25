@@ -47,7 +47,7 @@ describe("scanLibrary", () => {
     });
   });
 
-  test("resets a changed file to pending", async () => {
+  test("re-probes and re-evaluates a changed file", async () => {
     const { context, root, libraryId, rows, disk } = await setup();
     await scanLibrary(context, libraryId);
     const path = join(root, "movie.mkv");
@@ -64,7 +64,8 @@ describe("scanLibrary", () => {
     });
     const row = rows().find((r) => r.path === path);
     expect(row?.size).toBe(10);
-    expect(row?.status).toBe("pending");
+    expect(row?.mediaInfo).not.toBeNull();
+    expect(row?.status).toBe("done");
   });
 
   test("deletes files removed from disk", async () => {

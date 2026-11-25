@@ -3,112 +3,45 @@ import {
   IdParamsSchema,
   PageSchema,
   PaginationSchema,
-  UpdateSchema,
   VoidSchema,
 } from "./common.contract";
 import { LibraryIdSchema, RuleIdSchema } from "./ids";
 import { orpc } from "./orpc";
 
-export const ConditionFieldSchema = z.enum([
+const CodecValueSchema = z.string().min(1);
+const PositiveIntSchema = z.number().int().positive();
+const LanguagesSchema = z.array(z.string().min(1));
+
+export const RuleTypeSchema = z.enum([
   "container",
   "videoCodec",
-  "width",
-  "height",
-  "bitrate",
+  "maxResolution",
+  "maxBitrate",
   "audioCodec",
   "audioLanguages",
-  "size",
+  "subtitleLanguages",
 ]);
-export type ConditionField = z.infer<typeof ConditionFieldSchema>;
+export type RuleType = z.infer<typeof RuleTypeSchema>;
 
-export const ConditionOperatorSchema = z.enum([
-  "eq",
-  "neq",
-  "gt",
-  "lt",
-  "in",
-  "notIn",
+export const RuleValueSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("container"), value: CodecValueSchema }),
+  z.object({ type: z.literal("videoCodec"), value: CodecValueSchema }),
+  z.object({ type: z.literal("maxResolution"), value: PositiveIntSchema }),
+  z.object({ type: z.literal("maxBitrate"), value: PositiveIntSchema }),
+  z.object({ type: z.literal("audioCodec"), value: CodecValueSchema }),
+  z.object({ type: z.literal("audioLanguages"), value: LanguagesSchema }),
+  z.object({ type: z.literal("subtitleLanguages"), value: LanguagesSchema }),
 ]);
-export type ConditionOperator = z.infer<typeof ConditionOperatorSchema>;
+export type RuleValue = z.infer<typeof RuleValueSchema>;
 
-export const ScalarSchema = z.union([z.string(), z.number()]);
-export type Scalar = z.infer<typeof ScalarSchema>;
-
-export const ConditionSchema = z.object({
-  field: ConditionFieldSchema,
-  operator: ConditionOperatorSchema,
-  value: z.union([ScalarSchema, z.array(ScalarSchema)]),
-});
-export type Condition = z.infer<typeof ConditionSchema>;
-
-export const ConditionCreateSchema = ConditionSchema.refine(
-  ({ operator, value }) => {
-    if (operator === "in" || operator === "notIn") {
-      return Array.isArray(value) && value.length > 0;
-    }
-    if (operator === "gt" || operator === "lt") {
-      return typeof value === "number";
-    }
-    return !Array.isArray(value);
-  },
-  { message: "Value does not match the operator" },
+export const RuleSchema = z.intersection(
+  RuleValueSchema,
+  z.object({
+    id: RuleIdSchema,
+    libraryId: LibraryIdSchema,
+    enabled: z.boolean(),
+  }),
 );
-export type ConditionCreate = z.infer<typeof ConditionCreateSchema>;
-
-export const ActionSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("transcodeVideo"),
-    codec: z.enum(["h264", "hevc", "av1"]),
-    crf: z.number(),
-  }),
-  z.object({
-    type: z.literal("transcodeAudio"),
-    codec: z.enum(["aac", "ac3", "eac3", "opus"]),
-    bitrate: z.number(),
-  }),
-  z.object({
-    type: z.literal("removeStreams"),
-    kind: z.enum(["audio", "subtitle"]),
-    keepLanguages: z.array(z.string()),
-  }),
-  z.object({
-    type: z.literal("setContainer"),
-    container: z.enum(["mkv", "mp4"]),
-  }),
-]);
-export type Action = z.infer<typeof ActionSchema>;
-
-export const ActionCreateSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("transcodeVideo"),
-    codec: z.enum(["h264", "hevc", "av1"]),
-    crf: z.number().int().min(0).max(63),
-  }),
-  z.object({
-    type: z.literal("transcodeAudio"),
-    codec: z.enum(["aac", "ac3", "eac3", "opus"]),
-    bitrate: z.number().int().positive(),
-  }),
-  z.object({
-    type: z.literal("removeStreams"),
-    kind: z.enum(["audio", "subtitle"]),
-    keepLanguages: z.array(z.string()),
-  }),
-  z.object({
-    type: z.literal("setContainer"),
-    container: z.enum(["mkv", "mp4"]),
-  }),
-]);
-export type ActionCreate = z.infer<typeof ActionCreateSchema>;
-
-export const RuleSchema = z.object({
-  id: RuleIdSchema,
-  libraryId: LibraryIdSchema,
-  name: z.string(),
-  enabled: z.boolean(),
-  conditions: z.array(ConditionSchema),
-  actions: z.array(ActionSchema),
-});
 export type Rule = z.infer<typeof RuleSchema>;
 
 export const ListRulesInputSchema = PaginationSchema.extend({
@@ -116,20 +49,23 @@ export const ListRulesInputSchema = PaginationSchema.extend({
 });
 export type ListRulesInput = z.infer<typeof ListRulesInputSchema>;
 
-export const RuleCreateSchema = z.object({
-  libraryId: LibraryIdSchema,
-  name: z.string().min(1),
-  enabled: z.boolean(),
-  conditions: z.array(ConditionCreateSchema),
-  actions: z.array(ActionCreateSchema).min(1),
-});
+export const RuleCreateSchema = z.intersection(
+  RuleValueSchema,
+  z.object({
+    libraryId: LibraryIdSchema,
+    enabled: z.boolean(),
+  }),
+);
 export type RuleCreate = z.infer<typeof RuleCreateSchema>;
 
-export const RuleUpdateSchema = UpdateSchema(
-  RuleCreateSchema.omit({ libraryId: true }),
-  RuleIdSchema,
+export const RuleSetSchema = z.intersection(
+  RuleValueSchema,
+  z.object({
+    id: RuleIdSchema,
+    enabled: z.boolean(),
+  }),
 );
-export type RuleUpdate = z.infer<typeof RuleUpdateSchema>;
+export type RuleSet = z.infer<typeof RuleSetSchema>;
 
 export const rulesContract = orpc
   .route({ prefix: "/rules", tags: ["rules"] })
@@ -146,9 +82,9 @@ export const rulesContract = orpc
       .route({ method: "GET", path: "/{id}" })
       .input(IdParamsSchema(RuleIdSchema))
       .output(RuleSchema),
-    update: orpc
-      .route({ method: "PATCH", path: "/{id}" })
-      .input(RuleUpdateSchema)
+    set: orpc
+      .route({ method: "PUT", path: "/{id}" })
+      .input(RuleSetSchema)
       .output(RuleSchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })

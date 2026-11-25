@@ -6,9 +6,9 @@ import {
   UpdateSchema,
   VoidSchema,
 } from "./common.contract";
-import { FileIdSchema, JobIdSchema, RuleIdSchema, WorkerIdSchema } from "./ids";
+import { FileIdSchema, JobIdSchema, WorkerIdSchema } from "./ids";
 import { orpc } from "./orpc";
-import { ActionSchema } from "./rules.contract";
+import { RuleSchema } from "./rules.contract";
 
 export const JobStatusSchema = z.enum([
   "queued",
@@ -22,7 +22,7 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 export const JobSchema = z.object({
   id: JobIdSchema,
   fileId: FileIdSchema,
-  ruleId: RuleIdSchema,
+  rules: z.array(RuleSchema),
   status: JobStatusSchema,
   workerId: WorkerIdSchema.nullable(),
   progress: z.number(),
@@ -36,7 +36,7 @@ export type Job = z.infer<typeof JobSchema>;
 export const JobOfferSchema = z.object({
   job: JobSchema,
   sourcePath: z.string(),
-  actions: z.array(ActionSchema),
+  rules: z.array(RuleSchema),
 });
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 
