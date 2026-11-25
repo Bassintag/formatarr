@@ -14,7 +14,7 @@ import {
 
 function setup() {
   const { call, db } = createTestCaller();
-  const seedBase = async () => {
+  const seedBase = () => {
     const library = seedLibrary(db);
     const worker = seedWorker(db);
     const file = (path: string) => seedFile(db, library.id, { path });
@@ -26,14 +26,16 @@ function setup() {
 describe("jobs", () => {
   test("list filters by status, worker and file", async () => {
     const { call, db, seedBase } = setup();
-    const { worker, seedFile } = await seedBase();
-    const a = await seedFile("/a");
-    const b = await seedFile("/b");
-    await db.insert(jobs).values([
-      { fileId: a.id, status: "queued" },
-      { fileId: a.id, workerId: worker.id, status: "running" },
-      { fileId: b.id, status: "failed" },
-    ]);
+    const { worker, seedFile } = seedBase();
+    const a = seedFile("/a");
+    const b = seedFile("/b");
+    db.insert(jobs)
+      .values([
+        { fileId: a.id, status: "queued" },
+        { fileId: a.id, workerId: worker.id, status: "running" },
+        { fileId: b.id, status: "failed" },
+      ])
+      .run();
     const list = async (input: object) =>
       (await call.jobs.list({ page: 0, pageSize: 50, ...input })).items.map(
         (j) => j.status,
@@ -47,9 +49,11 @@ describe("jobs", () => {
 
   test("list paginates and reports the total", async () => {
     const { call, db, seedBase } = setup();
-    const { seedFile } = await seedBase();
-    const file = await seedFile("/a");
-    await db.insert(jobs).values([1, 2, 3].map(() => ({ fileId: file.id })));
+    const { seedFile } = seedBase();
+    const file = seedFile("/a");
+    db.insert(jobs)
+      .values([1, 2, 3].map(() => ({ fileId: file.id })))
+      .run();
 
     const page = await call.jobs.list({ page: 1, pageSize: 2 });
 
@@ -59,8 +63,8 @@ describe("jobs", () => {
 
   test("get returns the job", async () => {
     const { call, db, seedBase } = setup();
-    const { library, seedFile } = await seedBase();
-    const file = await seedFile("/a");
+    const { library, seedFile } = seedBase();
+    const file = seedFile("/a");
     const rule = seedRule(db, library.id, { type: "maxBitrate", value: 8000 });
     const job = seedJob(db, file.id, [rule.id]);
 
@@ -80,10 +84,10 @@ describe("jobs", () => {
 
   test("remove deletes the job and keeps the file", async () => {
     const { call, db, seedBase } = setup();
-    const { seedFile } = await seedBase();
-    const file = await seedFile("/a");
-    const job = await firstOrThrow(
-      db.insert(jobs).values({ fileId: file.id }).returning(),
+    const { seedFile } = seedBase();
+    const file = seedFile("/a");
+    const job = firstOrThrow(
+      db.insert(jobs).values({ fileId: file.id }).returning().all(),
     );
 
     await call.jobs.remove({ id: job.id });
@@ -101,8 +105,8 @@ describe("jobs", () => {
 
   test("deleting a rule removes it from the job and deleting the job keeps the rule", async () => {
     const { call, db, seedBase } = setup();
-    const { library, seedFile } = await seedBase();
-    const file = await seedFile("/a");
+    const { library, seedFile } = seedBase();
+    const file = seedFile("/a");
     const keep = seedRule(db, library.id, { type: "container", value: "mkv" });
     const drop = seedRule(db, library.id, { type: "maxBitrate", value: 1 });
     const job = seedJob(db, file.id, [keep.id, drop.id]);

@@ -27,10 +27,11 @@ export const authMiddleware = os
 
     if (kind === "worker") {
       if (bearer) {
-        const [worker] = await context.db
+        const worker = context.db
           .select({ id: workers.id, enabled: workers.enabled })
           .from(workers)
-          .where(eq(workers.tokenHash, hashWorkerToken(bearer)));
+          .where(eq(workers.tokenHash, hashWorkerToken(bearer)))
+          .get();
         if (worker?.enabled) {
           return next({ context: { worker: { id: worker.id } as AuthWorker } });
         }

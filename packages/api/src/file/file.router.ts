@@ -10,7 +10,7 @@ import {
 } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
-const list = orpc.files.list.handler(async ({ context, input }) => {
+const list = orpc.files.list.handler(({ context, input }) => {
   function where(table: typeof files) {
     const conditions: SQL[] = [];
     if (input.libraryId) {
@@ -26,33 +26,35 @@ const list = orpc.files.list.handler(async ({ context, input }) => {
   }
 
   return toPage(
-    context.db.query.files.findMany({
-      ...fileOptions,
-      where: { RAW: where },
-      orderBy: { id: "asc" },
-      ...paginationOption(input),
-    }),
-    context.db.select({ total: count() }).from(files).where(where(files)),
+    context.db.query.files
+      .findMany({
+        ...fileOptions,
+        where: { RAW: where },
+        orderBy: { id: "asc" },
+        ...paginationOption(input),
+      })
+      .sync(),
+    context.db.select({ total: count() }).from(files).where(where(files)).all(),
   );
 });
 
-const get = orpc.files.get.handler(({ context, input }) =>
-  orThrow(
-    context.db.query.files.findFirst({
-      ...fileOptions,
-      where: { id: input.id },
-    }),
-  ),
-);
+const get = orpc.files.get.handler(({ context, input }) => {
+  return orThrow(
+    context.db.query.files
+      .findFirst({ ...fileOptions, where: { id: input.id } })
+      .sync(),
+  );
+});
 
 const update = orpc.files.update.handler(async ({ context, input }) => {
   const { id, ignored } = input;
-  await firstOrThrow(
+  firstOrThrow(
     context.db
       .update(files)
       .set({ ignored })
       .where(eq(files.id, id))
-      .returning({ id: files.id }),
+      .returning({ id: files.id })
+      .all(),
   );
   await context.events.publish("event", {
     resource: "file",
@@ -60,7 +62,7 @@ const update = orpc.files.update.handler(async ({ context, input }) => {
     id,
   });
   return orThrow(
-    context.db.query.files.findFirst({ ...fileOptions, where: { id } }),
+    context.db.query.files.findFirst({ ...fileOptions, where: { id } }).sync(),
   );
 });
 

@@ -12,7 +12,7 @@ import {
 } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
-const list = orpc.jobs.list.handler(async ({ context, input }) => {
+const list = orpc.jobs.list.handler(({ context, input }) => {
   function where(table: typeof jobs) {
     const conditions: SQL[] = [];
     if (input.status) {
@@ -27,14 +27,16 @@ const list = orpc.jobs.list.handler(async ({ context, input }) => {
     return buildWhere(conditions);
   }
 
-  const page = await toPage(
-    context.db.query.jobs.findMany({
-      ...jobOptions,
-      where: { RAW: where },
-      orderBy: { id: "asc" },
-      ...paginationOption(input),
-    }),
-    context.db.select({ total: count() }).from(jobs).where(where(jobs)),
+  const page = toPage(
+    context.db.query.jobs
+      .findMany({
+        ...jobOptions,
+        where: { RAW: where },
+        orderBy: { id: "asc" },
+        ...paginationOption(input),
+      })
+      .sync(),
+    context.db.select({ total: count() }).from(jobs).where(where(jobs)).all(),
   );
   return { ...page, items: page.items as Job[] };
 });
@@ -44,15 +46,16 @@ const create = orpc.jobs.create.handler(() => {
   throw new ORPCError("NOT_IMPLEMENTED");
 });
 
-const get = orpc.jobs.get.handler(
-  async ({ context, input }) =>
-    (await orThrow(
-      context.db.query.jobs.findFirst({
+const get = orpc.jobs.get.handler(({ context, input }) => {
+  return orThrow(
+    context.db.query.jobs
+      .findFirst({
         ...jobOptions,
         where: { id: input.id },
-      }),
-    )) as Job,
-);
+      })
+      .sync(),
+  ) as Job;
+});
 
 const update = orpc.jobs.update.handler(() => {
   // TODO: implement
@@ -60,11 +63,12 @@ const update = orpc.jobs.update.handler(() => {
 });
 
 const remove = orpc.jobs.remove.handler(async ({ context, input }) => {
-  await firstOrThrow(
+  firstOrThrow(
     context.db
       .delete(jobs)
       .where(eq(jobs.id, input.id))
-      .returning({ id: jobs.id }),
+      .returning({ id: jobs.id })
+      .all(),
   );
   await context.events.publish("event", {
     resource: "job",

@@ -9,12 +9,12 @@ function setup() {
   const { call, db } = createTestCaller();
   const dir = "/media/lib";
   mockFileSystem({ [join(dir, "file.txt")]: "x" });
-  const seedIntegration = async (name: string) => {
-    const [row] = await db
+  const seedIntegration = (name: string) => {
+    const row = db
       .insert(integrations)
       .values({ type: "radarr", name, baseUrl: "http://x", apiKey: "k" })
-      .returning({ id: integrations.id });
-    if (!row) throw new Error("seed failed");
+      .returning({ id: integrations.id })
+      .get();
     return row.id;
   };
   return { call, db, dir, seedIntegration };
@@ -23,7 +23,7 @@ function setup() {
 describe("libraries CRUD", () => {
   test("create returns the library with its integration ids", async () => {
     const { call, dir, seedIntegration } = setup();
-    const integrationId = await seedIntegration("r1");
+    const integrationId = seedIntegration("r1");
 
     const created = await call.libraries.create({
       name: "movies",
@@ -77,8 +77,8 @@ describe("libraries CRUD", () => {
 
   test("update changes only provided fields and replaces integrations", async () => {
     const { call, dir, seedIntegration } = setup();
-    const first = await seedIntegration("r1");
-    const second = await seedIntegration("r2");
+    const first = seedIntegration("r1");
+    const second = seedIntegration("r2");
     const { id } = await call.libraries.create({
       name: "movies",
       path: dir,
@@ -107,7 +107,7 @@ describe("libraries CRUD", () => {
 
   test("remove deletes the library and its links", async () => {
     const { call, db, dir, seedIntegration } = setup();
-    const integrationId = await seedIntegration("r1");
+    const integrationId = seedIntegration("r1");
     const { id } = await call.libraries.create({
       name: "movies",
       path: dir,
@@ -120,7 +120,7 @@ describe("libraries CRUD", () => {
     expect(call.libraries.get({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    expect(await db.select().from(libraryIntegrations)).toEqual([]);
+    expect(db.select().from(libraryIntegrations).all()).toEqual([]);
   });
 
   test("unknown ids are not found", async () => {
