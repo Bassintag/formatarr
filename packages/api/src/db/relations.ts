@@ -40,13 +40,13 @@ export const relations = defineRelations(schema, (r) => ({
       from: r.jobs.fileId,
       to: r.files.id,
     }),
-    rule: r.one.rules({
-      from: r.jobs.ruleId,
-      to: r.rules.id,
-    }),
     worker: r.one.workers({
       from: r.jobs.workerId,
       to: r.workers.id,
+    }),
+    rules: r.many.rules({
+      from: r.jobs.id.through(r.jobRules.jobId),
+      to: r.rules.id.through(r.jobRules.ruleId),
     }),
   },
 }));

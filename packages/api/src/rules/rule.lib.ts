@@ -1,18 +1,21 @@
 import type {
-  Condition,
-  ConditionField,
   FileId,
   JobId,
   LibraryId,
   MediaInfo,
-  Rule,
   RuleId,
-  Scalar,
+  RuleValue,
 } from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Context } from "@/context";
-import { files, jobs, libraries, rules as rulesTable } from "@/db/schema";
+import {
+  files,
+  jobRules,
+  jobs,
+  libraries,
+  rules as rulesTable,
+} from "@/db/schema";
 import type { Tx } from "@/lib/db";
 
 export function assertLibraryExists(tx: Tx, libraryId: LibraryId) {
@@ -26,84 +29,9 @@ export function assertLibraryExists(tx: Tx, libraryId: LibraryId) {
   }
 }
 
-type MatchableFile = { size: number; mediaInfo: MediaInfo | null };
-
 type EngineContext = Pick<Context, "db" | "events" | "logger">;
 
 const JOB_CHUNK_SIZE = 500;
-
-export function getFieldValues(
-  field: ConditionField,
-  file: MatchableFile,
-): Scalar[] {
-  const { mediaInfo } = file;
-  if (field === "size") return [file.size];
-  if (!mediaInfo) return [];
-  switch (field) {
-    case "container":
-      return [mediaInfo.container];
-    case "bitrate":
-      return [mediaInfo.bitrate];
-    case "videoCodec":
-      return [mediaInfo.video.codec];
-    case "width":
-      return [mediaInfo.video.width];
-    case "height":
-      return [mediaInfo.video.height];
-    case "audioCodec":
-      return mediaInfo.audio.map((a) => a.codec);
-    case "audioLanguages":
-      return mediaInfo.audio.flatMap((a) => (a.language ? [a.language] : []));
-  }
-}
-
-export function evaluateCondition(
-  condition: Condition,
-  file: MatchableFile,
-): boolean {
-  const values = getFieldValues(condition.field, file);
-  const expected = Array.isArray(condition.value)
-    ? condition.value
-    : [condition.value];
-  const matches = (value: Scalar) => expected.includes(value);
-  switch (condition.operator) {
-    case "eq":
-    case "in":
-      return values.some(matches);
-    case "neq":
-    case "notIn":
-      return !values.some(matches);
-    case "gt":
-      return values.some(
-        (value) =>
-          typeof value === "number" &&
-          typeof condition.value === "number" &&
-          value > condition.value,
-      );
-    case "lt":
-      return values.some(
-        (value) =>
-          typeof value === "number" &&
-          typeof condition.value === "number" &&
-          value < condition.value,
-      );
-  }
-}
-
-export function matchRule(
-  rule: Pick<Rule, "conditions">,
-  file: MatchableFile,
-): boolean {
-  return rule.conditions.every((condition) =>
-    evaluateCondition(condition, file),
-  );
-}
-
-export function findMatchingRule<
-  R extends Pick<Rule, "enabled" | "conditions">,
->(rules: R[], file: MatchableFile): R | undefined {
-  return rules.find((rule) => rule.enabled && matchRule(rule, file));
-}
 
 export async function createJobsForFiles(
   context: EngineContext,
@@ -111,11 +39,8 @@ export async function createJobsForFiles(
 ) {
   const { db, events } = context;
   const createdJobs: JobId[] = [];
-  const queuedFiles: FileId[] = [];
-  const rulesByLibrary = new Map<
-    LibraryId,
-    { id: RuleId; enabled: boolean; conditions: Condition[] }[]
-  >();
+  const updatedFiles: FileId[] = [];
+  const rulesByLibrary = new Map<LibraryId, (RuleValue & { id: RuleId })[]>();
 
   db.transaction((tx) => {
     for (let start = 0; start < ids.length; start += JOB_CHUNK_SIZE) {
@@ -123,7 +48,6 @@ export async function createJobsForFiles(
         .select({
           id: files.id,
           libraryId: files.libraryId,
-          size: files.size,
           mediaInfo: files.mediaInfo,
         })
         .from(files)
@@ -143,8 +67,8 @@ export async function createJobsForFiles(
           rules = tx
             .select({
               id: rulesTable.id,
-              enabled: rulesTable.enabled,
-              conditions: rulesTable.conditions,
+              type: rulesTable.type,
+              value: rulesTable.value,
             })
             .from(rulesTable)
             .where(
@@ -154,22 +78,32 @@ export async function createJobsForFiles(
               ),
             )
             .orderBy(asc(rulesTable.id))
-            .all();
+            .all() as (RuleValue & { id: RuleId })[];
           rulesByLibrary.set(file.libraryId, rules);
         }
-        const rule = findMatchingRule(rules, file);
-        if (!rule) continue;
+        const unmet = findUnmetRules(rules, file.mediaInfo as MediaInfo);
+        if (unmet.length === 0) {
+          tx.update(files)
+            .set({ status: "done" })
+            .where(eq(files.id, file.id))
+            .run();
+          updatedFiles.push(file.id);
+          continue;
+        }
         const job = tx
           .insert(jobs)
-          .values({ fileId: file.id, ruleId: rule.id })
+          .values({ fileId: file.id })
           .returning({ id: jobs.id })
           .get();
+        tx.insert(jobRules)
+          .values(unmet.map((rule) => ({ jobId: job.id, ruleId: rule.id })))
+          .run();
         tx.update(files)
           .set({ status: "queued" })
           .where(eq(files.id, file.id))
           .run();
         createdJobs.push(job.id);
-        queuedFiles.push(file.id);
+        updatedFiles.push(file.id);
       }
     }
   });
@@ -177,9 +111,41 @@ export async function createJobsForFiles(
   for (const id of createdJobs) {
     await events.publish("event", { resource: "job", change: "created", id });
   }
-  for (const id of queuedFiles) {
+  for (const id of updatedFiles) {
     await events.publish("event", { resource: "file", change: "updated", id });
   }
 
   return createdJobs.length;
+}
+
+function onlyAllowed(tracks: { language: string | null }[], allowed: string[]) {
+  return tracks.every(
+    ({ language }) => language === null || allowed.includes(language),
+  );
+}
+
+export function isSatisfied(rule: RuleValue, mediaInfo: MediaInfo): boolean {
+  switch (rule.type) {
+    case "container":
+      return mediaInfo.container === rule.value;
+    case "videoCodec":
+      return mediaInfo.video.codec === rule.value;
+    case "maxResolution":
+      return mediaInfo.video.height <= rule.value;
+    case "maxBitrate":
+      return mediaInfo.bitrate <= rule.value;
+    case "audioCodec":
+      return mediaInfo.audio.every((track) => track.codec === rule.value);
+    case "audioLanguages":
+      return onlyAllowed(mediaInfo.audio, rule.value);
+    case "subtitleLanguages":
+      return onlyAllowed(mediaInfo.subtitles, rule.value);
+  }
+}
+
+export function findUnmetRules<R extends RuleValue>(
+  rules: R[],
+  mediaInfo: MediaInfo,
+): R[] {
+  return rules.filter((rule) => !isSatisfied(rule, mediaInfo));
 }

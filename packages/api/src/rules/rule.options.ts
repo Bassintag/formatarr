@@ -4,9 +4,8 @@ export const ruleOptions = {
   columns: {
     id: true,
     libraryId: true,
-    name: true,
     enabled: true,
-    conditions: true,
-    actions: true,
+    type: true,
+    value: true,
   },
 } satisfies QueryOptions<"rules">;

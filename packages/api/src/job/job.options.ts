@@ -1,10 +1,10 @@
 import type { QueryOptions } from "@/lib/db";
+import { ruleOptions } from "@/rules/rule.options";
 
 export const jobOptions = {
   columns: {
     id: true,
     fileId: true,
-    ruleId: true,
     workerId: true,
     status: true,
     progress: true,
@@ -13,4 +13,5 @@ export const jobOptions = {
     startedAt: true,
     finishedAt: true,
   },
+  with: { rules: ruleOptions },
 } satisfies QueryOptions<"jobs">;

@@ -1,11 +1,12 @@
-import type { LibraryId } from "@formatarr/contract";
+import type { FileId, LibraryId, RuleId } from "@formatarr/contract";
 import type { Context } from "@/context";
-import { files, libraries, rules, workers } from "@/db/schema";
+import { files, jobRules, jobs, libraries, rules, workers } from "@/db/schema";
 
 type Db = Context["db"];
 type LibraryValues = Partial<typeof libraries.$inferInsert>;
 type FileValues = Partial<typeof files.$inferInsert>;
 type RuleValues = Partial<typeof rules.$inferInsert>;
+type JobValues = Partial<typeof jobs.$inferInsert>;
 type WorkerValues = Partial<typeof workers.$inferInsert>;
 
 export const unknownId = 999 as never;
@@ -47,13 +48,31 @@ export function seedRule(
     .insert(rules)
     .values({
       libraryId,
-      name: "r",
-      conditions: [],
-      actions: [{ type: "setContainer", container: "mkv" }],
+      type: "container",
+      value: "mkv",
       ...values,
     })
     .returning()
     .get();
+}
+
+export function seedJob(
+  db: Db,
+  fileId: FileId,
+  ruleIds: RuleId[] = [],
+  values: JobValues = {},
+) {
+  const job = db
+    .insert(jobs)
+    .values({ fileId, ...values })
+    .returning()
+    .get();
+  if (ruleIds.length > 0) {
+    db.insert(jobRules)
+      .values(ruleIds.map((ruleId) => ({ jobId: job.id, ruleId })))
+      .run();
+  }
+  return job;
 }
 
 export function seedWorker(db: Db, values: WorkerValues = {}) {

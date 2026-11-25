@@ -37,16 +37,9 @@ async function seed(db: ReturnType<typeof setup>) {
   await db
     .insert(libraryIntegrations)
     .values({ libraryId: library.id, integrationId: integration.id });
-  const rule = await db
+  await db
     .insert(rules)
-    .values({
-      libraryId: library.id,
-      name: "r",
-      conditions: [],
-      actions: [{ type: "setContainer", container: "mkv" }],
-    })
-    .returning()
-    .then(one);
+    .values({ libraryId: library.id, type: "container", value: "mkv" });
   const file = await db
     .insert(files)
     .values({ libraryId: library.id, path: "/movies/a.mkv", size: 1 })
@@ -63,7 +56,7 @@ async function seed(db: ReturnType<typeof setup>) {
     .then(one);
   const job = await db
     .insert(jobs)
-    .values({ fileId: file.id, ruleId: rule.id, workerId: worker.id })
+    .values({ fileId: file.id, workerId: worker.id })
     .returning()
     .then(one);
   return { library: library, worker: worker, job: job };

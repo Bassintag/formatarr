@@ -1,9 +1,9 @@
+import type { Rule } from "@formatarr/contract";
 import { count, eq } from "drizzle-orm";
 import { rules } from "@/db/schema";
 import {
   buildWhere,
   firstOrThrow,
-  hasChanges,
   orThrow,
   paginationOption,
   toPage,
@@ -21,7 +21,7 @@ const list = orpc.rules.list.handler(async ({ context, input }) => {
     ]);
   }
 
-  return toPage(
+  const page = await toPage(
     context.db.query.rules.findMany({
       ...ruleOptions,
       where: { RAW: where },
@@ -30,6 +30,7 @@ const list = orpc.rules.list.handler(async ({ context, input }) => {
     }),
     context.db.select({ total: count() }).from(rules).where(where(rules)),
   );
+  return { ...page, items: page.items as Rule[] };
 });
 
 const create = orpc.rules.create.handler(async ({ context, input }) => {
@@ -37,34 +38,32 @@ const create = orpc.rules.create.handler(async ({ context, input }) => {
     assertLibraryExists(tx, input.libraryId);
     return tx.insert(rules).values(input).returning({ id: rules.id }).get();
   });
-  return orThrow(
+  return (await orThrow(
     context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }),
-  );
+  )) as Rule;
 });
 
-const get = orpc.rules.get.handler(({ context, input }) =>
-  orThrow(
+const get = orpc.rules.get.handler(async ({ context, input }) => {
+  return (await orThrow(
     context.db.query.rules.findFirst({
       ...ruleOptions,
       where: { id: input.id },
     }),
-  ),
-);
+  )) as Rule;
+});
 
-const update = orpc.rules.update.handler(async ({ context, input }) => {
-  const { id, ...changes } = input;
-  if (hasChanges(changes)) {
-    await firstOrThrow(
-      context.db
-        .update(rules)
-        .set(changes)
-        .where(eq(rules.id, id))
-        .returning({ id: rules.id }),
-    );
-  }
-  return orThrow(
-    context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }),
+const set = orpc.rules.set.handler(async ({ context, input }) => {
+  const { id, ...values } = input;
+  await firstOrThrow(
+    context.db
+      .update(rules)
+      .set(values)
+      .where(eq(rules.id, id))
+      .returning({ id: rules.id }),
   );
+  return (await orThrow(
+    context.db.query.rules.findFirst({ ...ruleOptions, where: { id } }),
+  )) as Rule;
 });
 
 const remove = orpc.rules.remove.handler(async ({ context, input }) => {
@@ -80,6 +79,6 @@ export const rulesRouter = orpc.rules.router({
   list,
   create,
   get,
-  update,
+  set,
   remove,
 });

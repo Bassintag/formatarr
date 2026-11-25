@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { jobs, workers } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
-import { seedFile, seedLibrary, seedRule, unknownId } from "@/testing/seed";
+import { seedFile, seedLibrary, unknownId } from "@/testing/seed";
 import { hashWorkerToken } from "@/worker/worker.lib";
 
 const capabilities = { ffmpegVersion: "7.0", hwaccels: ["vaapi"] };
@@ -103,9 +103,8 @@ describe("running jobs", () => {
     const { call, db } = setup();
     const worker = await call.workers.create({ name: "w1", capabilities });
     const library = seedLibrary(db);
-    const rule = seedRule(db, library.id);
     const file = seedFile(db, library.id);
-    const base = { fileId: file.id, ruleId: rule.id, workerId: worker.id };
+    const base = { fileId: file.id, workerId: worker.id };
     await db.insert(jobs).values({ ...base, status: "queued" });
     const running = await firstOrThrow(
       db

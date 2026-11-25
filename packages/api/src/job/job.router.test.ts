@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import type { Rule } from "@formatarr/contract";
 import { jobs } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
 import {
   seedFile,
+  seedJob,
   seedLibrary,
   seedRule,
   seedWorker,
@@ -14,10 +16,9 @@ function setup() {
   const { call, db } = createTestCaller();
   const seedBase = async () => {
     const library = seedLibrary(db);
-    const rule = seedRule(db, library.id);
     const worker = seedWorker(db);
     const file = (path: string) => seedFile(db, library.id, { path });
-    return { rule, worker, seedFile: file };
+    return { library, worker, seedFile: file };
   };
   return { call, db, seedBase };
 }
@@ -25,13 +26,13 @@ function setup() {
 describe("jobs", () => {
   test("list filters by status, worker and file", async () => {
     const { call, db, seedBase } = setup();
-    const { rule, worker, seedFile } = await seedBase();
+    const { worker, seedFile } = await seedBase();
     const a = await seedFile("/a");
     const b = await seedFile("/b");
     await db.insert(jobs).values([
-      { fileId: a.id, ruleId: rule.id, status: "queued" },
-      { fileId: a.id, ruleId: rule.id, workerId: worker.id, status: "running" },
-      { fileId: b.id, ruleId: rule.id, status: "failed" },
+      { fileId: a.id, status: "queued" },
+      { fileId: a.id, workerId: worker.id, status: "running" },
+      { fileId: b.id, status: "failed" },
     ]);
     const list = async (input: object) =>
       (await call.jobs.list({ page: 0, pageSize: 50, ...input })).items.map(
@@ -46,11 +47,9 @@ describe("jobs", () => {
 
   test("list paginates and reports the total", async () => {
     const { call, db, seedBase } = setup();
-    const { rule, seedFile } = await seedBase();
+    const { seedFile } = await seedBase();
     const file = await seedFile("/a");
-    await db
-      .insert(jobs)
-      .values([1, 2, 3].map(() => ({ fileId: file.id, ruleId: rule.id })));
+    await db.insert(jobs).values([1, 2, 3].map(() => ({ fileId: file.id })));
 
     const page = await call.jobs.list({ page: 1, pageSize: 2 });
 
@@ -60,16 +59,15 @@ describe("jobs", () => {
 
   test("get returns the job", async () => {
     const { call, db, seedBase } = setup();
-    const { rule, seedFile } = await seedBase();
+    const { library, seedFile } = await seedBase();
     const file = await seedFile("/a");
-    const job = await firstOrThrow(
-      db.insert(jobs).values({ fileId: file.id, ruleId: rule.id }).returning(),
-    );
+    const rule = seedRule(db, library.id, { type: "maxBitrate", value: 8000 });
+    const job = seedJob(db, file.id, [rule.id]);
 
     expect(await call.jobs.get({ id: job.id })).toEqual({
       id: job.id,
       fileId: file.id,
-      ruleId: rule.id,
+      rules: [rule as Rule],
       workerId: null,
       status: "queued",
       progress: 0,
@@ -82,10 +80,10 @@ describe("jobs", () => {
 
   test("remove deletes the job and keeps the file", async () => {
     const { call, db, seedBase } = setup();
-    const { rule, seedFile } = await seedBase();
+    const { seedFile } = await seedBase();
     const file = await seedFile("/a");
     const job = await firstOrThrow(
-      db.insert(jobs).values({ fileId: file.id, ruleId: rule.id }).returning(),
+      db.insert(jobs).values({ fileId: file.id }).returning(),
     );
 
     await call.jobs.remove({ id: job.id });
@@ -98,6 +96,25 @@ describe("jobs", () => {
     });
     expect(call.jobs.remove({ id: job.id })).rejects.toMatchObject({
       code: "NOT_FOUND",
+    });
+  });
+
+  test("deleting a rule removes it from the job and deleting the job keeps the rule", async () => {
+    const { call, db, seedBase } = setup();
+    const { library, seedFile } = await seedBase();
+    const file = await seedFile("/a");
+    const keep = seedRule(db, library.id, { type: "container", value: "mkv" });
+    const drop = seedRule(db, library.id, { type: "maxBitrate", value: 1 });
+    const job = seedJob(db, file.id, [keep.id, drop.id]);
+
+    await call.rules.remove({ id: drop.id });
+
+    expect(
+      (await call.jobs.get({ id: job.id })).rules.map((r) => r.id),
+    ).toEqual([keep.id]);
+    await call.jobs.remove({ id: job.id });
+    expect(await call.rules.get({ id: keep.id })).toMatchObject({
+      id: keep.id,
     });
   });
 

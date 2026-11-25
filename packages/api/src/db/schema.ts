@@ -1,6 +1,4 @@
 import {
-  type Action,
-  type Condition,
   type File as FileEntity,
   type FileId,
   FileStatusSchema,
@@ -10,6 +8,8 @@ import {
   JobStatusSchema,
   type LibraryId,
   type RuleId,
+  RuleTypeSchema,
+  type RuleValue,
   type Worker,
   type WorkerId,
   WorkerStatusSchema,
@@ -62,17 +62,20 @@ export const libraryIntegrations = sqliteTable(
   (t) => [primaryKey({ columns: [t.libraryId, t.integrationId] })],
 );
 
-export const rules = sqliteTable("rules", {
-  id: integer().primaryKey({ autoIncrement: true }).$type<RuleId>(),
-  libraryId: integer("library_id")
-    .$type<LibraryId>()
-    .notNull()
-    .references(() => libraries.id, { onDelete: "cascade" }),
-  name: text().notNull(),
-  enabled: integer({ mode: "boolean" }).notNull().default(true),
-  conditions: text({ mode: "json" }).$type<Condition[]>().notNull(),
-  actions: text({ mode: "json" }).$type<Action[]>().notNull(),
-});
+export const rules = sqliteTable(
+  "rules",
+  {
+    id: integer().primaryKey({ autoIncrement: true }).$type<RuleId>(),
+    libraryId: integer("library_id")
+      .$type<LibraryId>()
+      .notNull()
+      .references(() => libraries.id, { onDelete: "cascade" }),
+    enabled: integer({ mode: "boolean" }).notNull().default(true),
+    type: text({ enum: values(RuleTypeSchema) }).notNull(),
+    value: text({ mode: "json" }).$type<RuleValue["value"]>().notNull(),
+  },
+  (t) => [uniqueIndex("rules_library_type_idx").on(t.libraryId, t.type)],
+);
 
 export const files = sqliteTable(
   "files",
@@ -124,10 +127,6 @@ export const jobs = sqliteTable(
       .$type<FileId>()
       .notNull()
       .references(() => files.id, { onDelete: "cascade" }),
-    ruleId: integer("rule_id")
-      .$type<RuleId>()
-      .notNull()
-      .references(() => rules.id, { onDelete: "cascade" }),
     workerId: integer("worker_id")
       .$type<WorkerId>()
       .references(() => workers.id, {
@@ -149,4 +148,19 @@ export const jobs = sqliteTable(
     index("jobs_status_idx").on(t.status),
     index("jobs_worker_idx").on(t.workerId),
   ],
+);
+
+export const jobRules = sqliteTable(
+  "job_rules",
+  {
+    jobId: integer("job_id")
+      .$type<JobId>()
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    ruleId: integer("rule_id")
+      .$type<RuleId>()
+      .notNull()
+      .references(() => rules.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.jobId, t.ruleId] })],
 );

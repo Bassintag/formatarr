@@ -7,7 +7,7 @@ A user-friendly alternative to Tdarr: automatically convert your media library w
 ## Features
 
 - **Libraries**: point Formatarr at your media folders.
-- **Rules**: describe what to convert with conditions and actions, no ffmpeg knowledge required.
+- **Rules**: describe the target format of your files (container, codecs, resolution, bitrate, languages), no ffmpeg knowledge required.
 - **Radarr / Sonarr integration**: keep your *arr apps in sync after conversions.
 - **Workers**: run ffmpeg jobs on one or several machines.
 - **Web UI**: job queue, progress, files browser and workers overview.
