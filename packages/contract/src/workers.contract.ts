@@ -4,6 +4,7 @@ import {
   IdParamsSchema,
   PageSchema,
   PaginationSchema,
+  UpdateSchema,
   VoidSchema,
 } from "./common.contract";
 import { JobIdSchema, WorkerIdSchema } from "./ids";
@@ -27,7 +28,7 @@ export type PathMapping = z.infer<typeof PathMappingSchema>;
 
 export const WorkerSchema = z.object({
   id: WorkerIdSchema,
-  name: z.string().min(1),
+  name: z.string(),
   status: WorkerStatusSchema,
   enabled: z.boolean(),
   capabilities: WorkerCapabilitiesSchema,
@@ -47,19 +48,20 @@ export const WorkerTokenSchema = z.object({
 });
 export type WorkerToken = z.infer<typeof WorkerTokenSchema>;
 
-export const CreateWorkerInputSchema = z.object({
+export const WorkerCreateSchema = z.object({
   name: z.string().min(1),
   capabilities: WorkerCapabilitiesSchema,
 });
-export type CreateWorkerInput = z.infer<typeof CreateWorkerInputSchema>;
+export type WorkerCreate = z.infer<typeof WorkerCreateSchema>;
 
-export const UpdateWorkerInputSchema = z.object({
-  id: WorkerIdSchema,
-  name: WorkerSchema.shape.name.optional(),
-  enabled: z.boolean().optional(),
-  pathMappings: z.array(PathMappingSchema).optional(),
-});
-export type UpdateWorkerInput = z.infer<typeof UpdateWorkerInputSchema>;
+export const WorkerUpdateSchema = UpdateSchema(
+  WorkerCreateSchema.omit({ capabilities: true }).extend({
+    enabled: z.boolean(),
+    pathMappings: z.array(PathMappingSchema),
+  }),
+  WorkerIdSchema,
+);
+export type WorkerUpdate = z.infer<typeof WorkerUpdateSchema>;
 
 export const workersContract = orpc
   .route({ prefix: "/workers", tags: ["workers"] })
@@ -70,7 +72,7 @@ export const workersContract = orpc
       .output(PageSchema(WorkerSchema)),
     create: orpc
       .route({ method: "POST", path: "/" })
-      .input(CreateWorkerInputSchema)
+      .input(WorkerCreateSchema)
       .output(CreatedWorkerSchema),
     get: orpc
       .route({ method: "GET", path: "/{id}" })
@@ -78,7 +80,7 @@ export const workersContract = orpc
       .output(WorkerSchema),
     update: orpc
       .route({ method: "PATCH", path: "/{id}" })
-      .input(UpdateWorkerInputSchema)
+      .input(WorkerUpdateSchema)
       .output(WorkerSchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })

@@ -34,27 +34,51 @@ export type ConditionOperator = z.infer<typeof ConditionOperatorSchema>;
 export const ScalarSchema = z.union([z.string(), z.number()]);
 export type Scalar = z.infer<typeof ScalarSchema>;
 
-export const ConditionSchema = z
-  .object({
-    field: ConditionFieldSchema,
-    operator: ConditionOperatorSchema,
-    value: z.union([ScalarSchema, z.array(ScalarSchema)]),
-  })
-  .refine(
-    ({ operator, value }) => {
-      if (operator === "in" || operator === "notIn") {
-        return Array.isArray(value) && value.length > 0;
-      }
-      if (operator === "gt" || operator === "lt") {
-        return typeof value === "number";
-      }
-      return !Array.isArray(value);
-    },
-    { message: "Value does not match the operator" },
-  );
+export const ConditionSchema = z.object({
+  field: ConditionFieldSchema,
+  operator: ConditionOperatorSchema,
+  value: z.union([ScalarSchema, z.array(ScalarSchema)]),
+});
 export type Condition = z.infer<typeof ConditionSchema>;
 
+export const ConditionCreateSchema = ConditionSchema.refine(
+  ({ operator, value }) => {
+    if (operator === "in" || operator === "notIn") {
+      return Array.isArray(value) && value.length > 0;
+    }
+    if (operator === "gt" || operator === "lt") {
+      return typeof value === "number";
+    }
+    return !Array.isArray(value);
+  },
+  { message: "Value does not match the operator" },
+);
+export type ConditionCreate = z.infer<typeof ConditionCreateSchema>;
+
 export const ActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("transcodeVideo"),
+    codec: z.enum(["h264", "hevc", "av1"]),
+    crf: z.number(),
+  }),
+  z.object({
+    type: z.literal("transcodeAudio"),
+    codec: z.enum(["aac", "ac3", "eac3", "opus"]),
+    bitrate: z.number(),
+  }),
+  z.object({
+    type: z.literal("removeStreams"),
+    kind: z.enum(["audio", "subtitle"]),
+    keepLanguages: z.array(z.string()),
+  }),
+  z.object({
+    type: z.literal("setContainer"),
+    container: z.enum(["mkv", "mp4"]),
+  }),
+]);
+export type Action = z.infer<typeof ActionSchema>;
+
+export const ActionCreateSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("transcodeVideo"),
     codec: z.enum(["h264", "hevc", "av1"]),
@@ -75,15 +99,15 @@ export const ActionSchema = z.discriminatedUnion("type", [
     container: z.enum(["mkv", "mp4"]),
   }),
 ]);
-export type Action = z.infer<typeof ActionSchema>;
+export type ActionCreate = z.infer<typeof ActionCreateSchema>;
 
 export const RuleSchema = z.object({
   id: RuleIdSchema,
   libraryId: LibraryIdSchema,
-  name: z.string().min(1),
+  name: z.string(),
   enabled: z.boolean(),
   conditions: z.array(ConditionSchema),
-  actions: z.array(ActionSchema).min(1),
+  actions: z.array(ActionSchema),
 });
 export type Rule = z.infer<typeof RuleSchema>;
 
@@ -92,14 +116,20 @@ export const ListRulesInputSchema = PaginationSchema.extend({
 });
 export type ListRulesInput = z.infer<typeof ListRulesInputSchema>;
 
-export const CreateRuleInputSchema = RuleSchema.omit({ id: true });
-export type CreateRuleInput = z.infer<typeof CreateRuleInputSchema>;
+export const RuleCreateSchema = z.object({
+  libraryId: LibraryIdSchema,
+  name: z.string().min(1),
+  enabled: z.boolean(),
+  conditions: z.array(ConditionCreateSchema),
+  actions: z.array(ActionCreateSchema).min(1),
+});
+export type RuleCreate = z.infer<typeof RuleCreateSchema>;
 
-export const UpdateRuleInputSchema = UpdateSchema(
-  CreateRuleInputSchema.omit({ libraryId: true }),
+export const RuleUpdateSchema = UpdateSchema(
+  RuleCreateSchema.omit({ libraryId: true }),
   RuleIdSchema,
 );
-export type UpdateRuleInput = z.infer<typeof UpdateRuleInputSchema>;
+export type RuleUpdate = z.infer<typeof RuleUpdateSchema>;
 
 export const rulesContract = orpc
   .route({ prefix: "/rules", tags: ["rules"] })
@@ -110,7 +140,7 @@ export const rulesContract = orpc
       .output(PageSchema(RuleSchema)),
     create: orpc
       .route({ method: "POST", path: "/" })
-      .input(CreateRuleInputSchema)
+      .input(RuleCreateSchema)
       .output(RuleSchema),
     get: orpc
       .route({ method: "GET", path: "/{id}" })
@@ -118,7 +148,7 @@ export const rulesContract = orpc
       .output(RuleSchema),
     update: orpc
       .route({ method: "PATCH", path: "/{id}" })
-      .input(UpdateRuleInputSchema)
+      .input(RuleUpdateSchema)
       .output(RuleSchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })

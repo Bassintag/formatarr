@@ -18,18 +18,18 @@ export type FileStatus = z.infer<typeof FileStatusSchema>;
 
 export const MediaInfoSchema = z.object({
   container: z.string(),
-  durationSeconds: z.number().nonnegative(),
-  bitrate: z.number().nonnegative(),
+  durationSeconds: z.number(),
+  bitrate: z.number(),
   video: z.object({
     codec: z.string(),
-    width: z.number().int(),
-    height: z.number().int(),
+    width: z.number(),
+    height: z.number(),
   }),
   audio: z.array(
     z.object({
       codec: z.string(),
       language: z.string().nullable(),
-      channels: z.number().int(),
+      channels: z.number(),
     }),
   ),
   subtitles: z.array(
@@ -42,7 +42,7 @@ export const FileSchema = z.object({
   id: FileIdSchema,
   libraryId: LibraryIdSchema,
   path: z.string(),
-  size: z.number().int().nonnegative(),
+  size: z.number(),
   mediaInfo: MediaInfoSchema.nullable(),
   status: FileStatusSchema,
   ignored: z.boolean(),
@@ -56,11 +56,11 @@ export const ListFilesInputSchema = PaginationSchema.extend({
 });
 export type ListFilesInput = z.infer<typeof ListFilesInputSchema>;
 
-export const UpdateFileInputSchema = z.object({
+export const FileUpdateSchema = z.object({
   id: FileIdSchema,
   ignored: z.boolean(),
 });
-export type UpdateFileInput = z.infer<typeof UpdateFileInputSchema>;
+export type FileUpdate = z.infer<typeof FileUpdateSchema>;
 
 export const filesContract = orpc
   .route({ prefix: "/files", tags: ["files"] })
@@ -75,6 +75,6 @@ export const filesContract = orpc
       .output(FileSchema),
     update: orpc
       .route({ method: "PATCH", path: "/{id}" })
-      .input(UpdateFileInputSchema)
+      .input(FileUpdateSchema)
       .output(FileSchema),
   });

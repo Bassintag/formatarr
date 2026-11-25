@@ -3,6 +3,7 @@ import {
   IdParamsSchema,
   PageSchema,
   PaginationSchema,
+  UpdateSchema,
   VoidSchema,
 } from "./common.contract";
 import { FileIdSchema, JobIdSchema, RuleIdSchema, WorkerIdSchema } from "./ids";
@@ -24,7 +25,7 @@ export const JobSchema = z.object({
   ruleId: RuleIdSchema,
   status: JobStatusSchema,
   workerId: WorkerIdSchema.nullable(),
-  progress: z.number().min(0).max(100),
+  progress: z.number(),
   error: z.string().nullable(),
   createdAt: z.date(),
   startedAt: z.date().nullable(),
@@ -46,17 +47,19 @@ export const ListJobsInputSchema = PaginationSchema.extend({
 });
 export type ListJobsInput = z.infer<typeof ListJobsInputSchema>;
 
-export const CreateJobInputSchema = z.object({ fileId: FileIdSchema });
-export type CreateJobInput = z.infer<typeof CreateJobInputSchema>;
+export const JobCreateSchema = z.object({ fileId: FileIdSchema });
+export type JobCreate = z.infer<typeof JobCreateSchema>;
 
-export const UpdateJobInputSchema = z.object({
-  id: JobIdSchema,
-  status: JobStatusSchema.optional(),
-  progress: JobSchema.shape.progress.optional(),
-  error: z.string().optional(),
-  workerId: WorkerIdSchema.optional(),
-});
-export type UpdateJobInput = z.infer<typeof UpdateJobInputSchema>;
+export const JobUpdateSchema = UpdateSchema(
+  z.object({
+    status: JobStatusSchema,
+    progress: z.number().min(0).max(100),
+    error: z.string(),
+    workerId: WorkerIdSchema,
+  }),
+  JobIdSchema,
+);
+export type JobUpdate = z.infer<typeof JobUpdateSchema>;
 
 export const jobsContract = orpc
   .route({ prefix: "/jobs", tags: ["jobs"] })
@@ -67,7 +70,7 @@ export const jobsContract = orpc
       .output(PageSchema(JobSchema)),
     create: orpc
       .route({ method: "POST", path: "/" })
-      .input(CreateJobInputSchema)
+      .input(JobCreateSchema)
       .output(JobSchema),
     get: orpc
       .route({ method: "GET", path: "/{id}" })
@@ -75,7 +78,7 @@ export const jobsContract = orpc
       .output(JobSchema),
     update: orpc
       .route({ method: "PATCH", path: "/{id}" })
-      .input(UpdateJobInputSchema)
+      .input(JobUpdateSchema)
       .output(JobSchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })

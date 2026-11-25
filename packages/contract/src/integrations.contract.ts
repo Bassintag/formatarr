@@ -23,21 +23,27 @@ function maskApiKey(apiKey: string) {
 export const IntegrationSchema = z.object({
   id: IntegrationIdSchema,
   type: IntegrationTypeSchema,
-  name: z.string().min(1),
-  baseUrl: z.url(),
+  name: z.string(),
+  baseUrl: z.string(),
   apiKey: z.string().transform(maskApiKey),
   enabled: z.boolean(),
 });
 export type Integration = z.infer<typeof IntegrationSchema>;
 
-export const CreateIntegrationInputSchema = IntegrationSchema.omit({
-  id: true,
-}).extend({
+export const IntegrationCreateSchema = z.object({
+  type: IntegrationTypeSchema,
+  name: z.string().min(1),
+  baseUrl: z.url(),
   apiKey: z.string().min(1),
+  enabled: z.boolean(),
 });
-export type CreateIntegrationInput = z.infer<
-  typeof CreateIntegrationInputSchema
->;
+export type IntegrationCreate = z.infer<typeof IntegrationCreateSchema>;
+
+export const IntegrationUpdateSchema = UpdateSchema(
+  IntegrationCreateSchema,
+  IntegrationIdSchema,
+);
+export type IntegrationUpdate = z.infer<typeof IntegrationUpdateSchema>;
 
 export const integrationsContract = orpc
   .route({ prefix: "/integrations", tags: ["integrations"] })
@@ -48,7 +54,7 @@ export const integrationsContract = orpc
       .output(PageSchema(IntegrationSchema)),
     create: orpc
       .route({ method: "POST", path: "/" })
-      .input(CreateIntegrationInputSchema)
+      .input(IntegrationCreateSchema)
       .output(IntegrationSchema),
     get: orpc
       .route({ method: "GET", path: "/{id}" })
@@ -56,7 +62,7 @@ export const integrationsContract = orpc
       .output(IntegrationSchema),
     update: orpc
       .route({ method: "PATCH", path: "/{id}" })
-      .input(UpdateSchema(CreateIntegrationInputSchema, IntegrationIdSchema))
+      .input(IntegrationUpdateSchema)
       .output(IntegrationSchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })

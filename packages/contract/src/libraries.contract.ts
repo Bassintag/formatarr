@@ -11,22 +11,30 @@ import { orpc } from "./orpc";
 
 export const LibrarySchema = z.object({
   id: LibraryIdSchema,
-  name: z.string().min(1),
-  path: z.string().min(1),
+  name: z.string(),
+  path: z.string(),
   enabled: z.boolean(),
-  scanCron: z.string().min(1).nullable(),
+  scanCron: z.string().nullable(),
   watch: z.boolean(),
   integrations: z.array(z.object({ id: IntegrationIdSchema })),
 });
 export type Library = z.infer<typeof LibrarySchema>;
 
-export const CreateLibraryInputSchema = LibrarySchema.omit({
-  id: true,
-}).extend({
-  scanCron: LibrarySchema.shape.scanCron.optional(),
-  watch: LibrarySchema.shape.watch.optional(),
+export const LibraryCreateSchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  enabled: z.boolean(),
+  scanCron: z.string().min(1).nullable().optional(),
+  watch: z.boolean().optional(),
+  integrations: z.array(z.object({ id: IntegrationIdSchema })),
 });
-export type CreateLibraryInput = z.infer<typeof CreateLibraryInputSchema>;
+export type LibraryCreate = z.infer<typeof LibraryCreateSchema>;
+
+export const LibraryUpdateSchema = UpdateSchema(
+  LibraryCreateSchema,
+  LibraryIdSchema,
+);
+export type LibraryUpdate = z.infer<typeof LibraryUpdateSchema>;
 
 export const librariesContract = orpc
   .route({ prefix: "/libraries", tags: ["libraries"] })
@@ -37,7 +45,7 @@ export const librariesContract = orpc
       .output(PageSchema(LibrarySchema)),
     create: orpc
       .route({ method: "POST", path: "/" })
-      .input(CreateLibraryInputSchema)
+      .input(LibraryCreateSchema)
       .output(LibrarySchema),
     get: orpc
       .route({ method: "GET", path: "/{id}" })
@@ -45,7 +53,7 @@ export const librariesContract = orpc
       .output(LibrarySchema),
     update: orpc
       .route({ method: "PATCH", path: "/{id}" })
-      .input(UpdateSchema(CreateLibraryInputSchema, LibraryIdSchema))
+      .input(LibraryUpdateSchema)
       .output(LibrarySchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })
