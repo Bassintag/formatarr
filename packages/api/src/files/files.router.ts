@@ -1,7 +1,13 @@
-import { and, count, eq, like, type SQL, sql } from "drizzle-orm";
+import { count, eq, like, type SQL } from "drizzle-orm";
 import { files } from "@/db/schema";
 import { fileOptions } from "@/files/file.options";
-import { orThrow, paginationOption, toPage } from "@/lib/db";
+import {
+  buildWhere,
+  firstOrThrow,
+  orThrow,
+  paginationOption,
+  toPage,
+} from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
 const list = orpc.files.list.handler(async ({ context, input }) => {
@@ -16,7 +22,7 @@ const list = orpc.files.list.handler(async ({ context, input }) => {
     if (input.search) {
       conditions.push(like(table.path, `%${input.search}%`));
     }
-    return and(...conditions) ?? sql`true`;
+    return buildWhere(conditions);
   }
 
   return toPage(
@@ -41,10 +47,13 @@ const get = orpc.files.get.handler(({ context, input }) =>
 
 const update = orpc.files.update.handler(async ({ context, input }) => {
   const { id, ignored } = input;
-  await orThrow(
-    context.db.query.files.findFirst({ columns: { id: true }, where: { id } }),
+  await firstOrThrow(
+    context.db
+      .update(files)
+      .set({ ignored })
+      .where(eq(files.id, id))
+      .returning({ id: files.id }),
   );
-  context.db.update(files).set({ ignored }).where(eq(files.id, id)).run();
   await context.events.publish("event", {
     resource: "file",
     change: "updated",

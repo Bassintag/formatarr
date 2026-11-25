@@ -1,8 +1,14 @@
 import { ORPCError } from "@orpc/server";
-import { and, count, eq, type SQL, sql } from "drizzle-orm";
+import { count, eq, type SQL } from "drizzle-orm";
 import { jobs } from "@/db/schema";
 import { jobOptions } from "@/jobs/job.options";
-import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
+import {
+  buildWhere,
+  firstOrThrow,
+  orThrow,
+  paginationOption,
+  toPage,
+} from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
 const list = orpc.jobs.list.handler(async ({ context, input }) => {
@@ -17,7 +23,7 @@ const list = orpc.jobs.list.handler(async ({ context, input }) => {
     if (input.fileId) {
       conditions.push(eq(table.fileId, input.fileId));
     }
-    return and(...conditions) ?? sql`true`;
+    return buildWhere(conditions);
   }
 
   return toPage(

@@ -1,13 +1,20 @@
 import { count, eq } from "drizzle-orm";
 import { integrations } from "@/db/schema";
 import { integrationOptions } from "@/integrations/integration.options";
-import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
+import {
+  firstOrThrow,
+  hasChanges,
+  orThrow,
+  paginationOption,
+  toPage,
+} from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
 const list = orpc.integrations.list.handler(({ context, input }) =>
   toPage(
     context.db.query.integrations.findMany({
       ...integrationOptions,
+      orderBy: { id: "asc" },
       ...paginationOption(input),
     }),
     context.db.select({ total: count() }).from(integrations),
@@ -29,17 +36,14 @@ const get = orpc.integrations.get.handler(({ context, input }) =>
 
 const update = orpc.integrations.update.handler(async ({ context, input }) => {
   const { id, ...changes } = input;
-  await orThrow(
-    context.db.query.integrations.findFirst({
-      columns: { id: true },
-      where: { id },
-    }),
-  );
-  if (Object.values(changes).some((value) => value !== undefined)) {
-    await context.db
-      .update(integrations)
-      .set(changes)
-      .where(eq(integrations.id, id));
+  if (hasChanges(changes)) {
+    await firstOrThrow(
+      context.db
+        .update(integrations)
+        .set(changes)
+        .where(eq(integrations.id, id))
+        .returning({ id: integrations.id }),
+    );
   }
   return orThrow(
     context.db.query.integrations.findFirst({

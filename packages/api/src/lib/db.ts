@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Page, Pagination } from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
+import { and, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { relations } from "@/db/relations";
 
@@ -51,4 +52,12 @@ export async function firstOrThrow<T>(promise: Promise<T[]>) {
   const [result] = await promise;
   if (result == null) throw new ORPCError("NOT_FOUND");
   return result;
+}
+
+export function hasChanges(changes: Record<string, unknown>) {
+  return Object.values(changes).some((value) => value !== undefined);
+}
+
+export function buildWhere(conditions: (SQL | undefined)[]) {
+  return and(...conditions) ?? sql`true`;
 }

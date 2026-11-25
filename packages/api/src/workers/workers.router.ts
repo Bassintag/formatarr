@@ -1,7 +1,13 @@
 import { ORPCError } from "@orpc/server";
 import { count, eq } from "drizzle-orm";
 import { workers } from "@/db/schema";
-import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
+import {
+  firstOrThrow,
+  hasChanges,
+  orThrow,
+  paginationOption,
+  toPage,
+} from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 import { generateWorkerToken, hashWorkerToken } from "@/workers/worker.lib";
 import { workerOptions } from "@/workers/worker.options";
@@ -10,6 +16,7 @@ const list = orpc.workers.list.handler(async ({ context, input }) => {
   return toPage(
     context.db.query.workers.findMany({
       ...workerOptions,
+      orderBy: { id: "asc" },
       ...paginationOption(input),
     }),
     context.db.select({ total: count() }).from(workers),
@@ -53,7 +60,7 @@ const get = orpc.workers.get.handler(({ context, input }) =>
 
 const update = orpc.workers.update.handler(async ({ context, input }) => {
   const { id, ...changes } = input;
-  if (Object.values(changes).some((value) => value !== undefined)) {
+  if (hasChanges(changes)) {
     await firstOrThrow(
       context.db
         .update(workers)

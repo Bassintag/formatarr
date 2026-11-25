@@ -1,7 +1,12 @@
-import type { LibraryId } from "@formatarr/contract";
 import { count, eq } from "drizzle-orm";
 import { libraries } from "@/db/schema";
-import { firstOrThrow, orThrow, paginationOption, toPage } from "@/lib/db";
+import {
+  firstOrThrow,
+  hasChanges,
+  orThrow,
+  paginationOption,
+  toPage,
+} from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 import {
   assertCron,
@@ -14,6 +19,7 @@ const list = orpc.libraries.list.handler(async ({ context, input }) => {
   return toPage(
     context.db.query.libraries.findMany({
       ...libraryOptions,
+      orderBy: { id: "asc" },
       ...paginationOption(input),
     }),
     context.db.select({ total: count() }).from(libraries),
@@ -24,11 +30,14 @@ const create = orpc.libraries.create.handler(async ({ context, input }) => {
   await assertDirectory(input.path);
   assertCron(input.scanCron);
   const { integrations, ...values } = input;
-  const id = context.db.transaction((tx) => {
-    const { lastInsertRowid } = tx.insert(libraries).values(values).run();
-    const libraryId = Number(lastInsertRowid) as LibraryId;
-    setIntegrations(tx, libraryId, integrations);
-    return libraryId;
+  const { id } = context.db.transaction((tx) => {
+    const row = tx
+      .insert(libraries)
+      .values(values)
+      .returning({ id: libraries.id })
+      .get();
+    setIntegrations(tx, row.id, integrations);
+    return row;
   });
   const created = await orThrow(
     context.db.query.libraries.findFirst({
@@ -60,7 +69,7 @@ const update = orpc.libraries.update.handler(async ({ context, input }) => {
     }),
   );
   context.db.transaction((tx) => {
-    if (Object.values(changes).some((value) => value !== undefined)) {
+    if (hasChanges(changes)) {
       tx.update(libraries).set(changes).where(eq(libraries.id, id)).run();
     }
     if (integrations !== undefined) {
