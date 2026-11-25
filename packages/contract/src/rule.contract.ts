@@ -1,12 +1,5 @@
 import { z } from "zod";
-import {
-  IdParamsSchema,
-  PageSchema,
-  PaginationSchema,
-  VoidSchema,
-} from "./common.contract";
 import { LibraryIdSchema, RuleIdSchema } from "./ids";
-import { orpc } from "./orpc";
 
 const CodecValueSchema = z.string().min(1);
 const PositiveIntSchema = z.number().int().positive();
@@ -44,50 +37,16 @@ export const RuleSchema = z.intersection(
 );
 export type Rule = z.infer<typeof RuleSchema>;
 
-export const ListRulesInputSchema = PaginationSchema.extend({
-  libraryId: LibraryIdSchema.optional(),
-});
-export type ListRulesInput = z.infer<typeof ListRulesInputSchema>;
-
-export const RuleCreateSchema = z.intersection(
+export const LibraryRuleSchema = z.intersection(
   RuleValueSchema,
   z.object({
-    libraryId: LibraryIdSchema,
     enabled: z.boolean(),
   }),
 );
-export type RuleCreate = z.infer<typeof RuleCreateSchema>;
+export type LibraryRule = z.infer<typeof LibraryRuleSchema>;
 
-export const RuleSetSchema = z.intersection(
-  RuleValueSchema,
-  z.object({
-    id: RuleIdSchema,
-    enabled: z.boolean(),
-  }),
-);
-export type RuleSet = z.infer<typeof RuleSetSchema>;
-
-export const rulesContract = orpc
-  .route({ prefix: "/rules", tags: ["rules"] })
-  .router({
-    list: orpc
-      .route({ method: "GET", path: "/" })
-      .input(ListRulesInputSchema)
-      .output(PageSchema(RuleSchema)),
-    create: orpc
-      .route({ method: "POST", path: "/" })
-      .input(RuleCreateSchema)
-      .output(RuleSchema),
-    get: orpc
-      .route({ method: "GET", path: "/{id}" })
-      .input(IdParamsSchema(RuleIdSchema))
-      .output(RuleSchema),
-    set: orpc
-      .route({ method: "PUT", path: "/{id}" })
-      .input(RuleSetSchema)
-      .output(RuleSchema),
-    remove: orpc
-      .route({ method: "DELETE", path: "/{id}" })
-      .input(IdParamsSchema(RuleIdSchema))
-      .output(VoidSchema),
+export const LibraryRulesSchema = z
+  .array(LibraryRuleSchema)
+  .refine((rules) => new Set(rules.map((r) => r.type)).size === rules.length, {
+    message: "Only one rule per type is allowed",
   });

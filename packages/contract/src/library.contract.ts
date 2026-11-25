@@ -8,6 +8,7 @@ import {
 } from "./common.contract";
 import { IntegrationIdSchema, LibraryIdSchema } from "./ids";
 import { orpc } from "./orpc";
+import { LibraryRulesSchema, RuleSchema } from "./rule.contract";
 
 export const LibrarySchema = z.object({
   id: LibraryIdSchema,
@@ -17,6 +18,7 @@ export const LibrarySchema = z.object({
   scanCron: z.string().nullable(),
   watch: z.boolean(),
   integrations: z.array(z.object({ id: IntegrationIdSchema })),
+  rules: z.array(RuleSchema),
 });
 export type Library = z.infer<typeof LibrarySchema>;
 
@@ -27,6 +29,7 @@ export const LibraryCreateSchema = z.object({
   scanCron: z.string().min(1).nullable().optional(),
   watch: z.boolean().optional(),
   integrations: z.array(z.object({ id: IntegrationIdSchema })),
+  rules: LibraryRulesSchema.optional(),
 });
 export type LibraryCreate = z.infer<typeof LibraryCreateSchema>;
 

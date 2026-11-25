@@ -3,10 +3,10 @@ import type { FileId, LibraryId } from "@formatarr/contract";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files } from "@/db/schema";
+import { createJobsForFiles } from "@/job/job.lib";
 import { orThrow } from "@/lib/db";
 import { assertDirectory } from "@/library/library.lib";
 import { probeFiles } from "@/probe/probe.lib";
-import { createJobsForFiles } from "@/rules/rule.lib";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mkv",

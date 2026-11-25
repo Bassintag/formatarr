@@ -1,8 +1,12 @@
 import fsp from "node:fs/promises";
-import type { IntegrationId, LibraryId } from "@formatarr/contract";
+import type {
+  IntegrationId,
+  LibraryId,
+  LibraryRule,
+} from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
-import { eq, inArray } from "drizzle-orm";
-import { integrations, libraryIntegrations } from "@/db/schema";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { integrations, libraryIntegrations, rules } from "@/db/schema";
 import type { Tx } from "@/lib/db";
 
 export async function assertDirectory(path: string) {
@@ -40,6 +44,26 @@ export function setIntegrations(
       .values(
         integrationIds.map((integrationId) => ({ libraryId, integrationId })),
       )
+      .run();
+  }
+}
+
+export function setRules(tx: Tx, libraryId: LibraryId, items: LibraryRule[]) {
+  const types = items.map((item) => item.type);
+  if (types.length === 0) {
+    tx.delete(rules).where(eq(rules.libraryId, libraryId)).run();
+    return;
+  }
+  tx.delete(rules)
+    .where(and(eq(rules.libraryId, libraryId), notInArray(rules.type, types)))
+    .run();
+  for (const item of items) {
+    tx.insert(rules)
+      .values({ ...item, libraryId })
+      .onConflictDoUpdate({
+        target: [rules.libraryId, rules.type],
+        set: { enabled: item.enabled, value: item.value },
+      })
       .run();
   }
 }

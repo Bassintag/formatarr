@@ -6,7 +6,6 @@ import { integrationsRouter } from "@/integration/integration.router";
 import { jobsRouter } from "@/job/job.router";
 import { orpc } from "@/lib/orpc";
 import { librariesRouter } from "@/library/library.router";
-import { rulesRouter } from "@/rules/rules.router";
 import { scansRouter } from "@/scan/scan.router";
 import { settingsRouter } from "@/settings/settings.router";
 import { workersRouter } from "@/worker/worker.router";
@@ -19,7 +18,6 @@ export const router = orpc.router({
   integrations: integrationsRouter,
   jobs: jobsRouter,
   libraries: librariesRouter,
-  rules: rulesRouter,
   scans: scansRouter,
   workers: workersRouter,
   settings: settingsRouter,
