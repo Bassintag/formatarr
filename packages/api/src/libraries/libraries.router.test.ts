@@ -1,13 +1,13 @@
 import { describe, expect, mock, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { integrations, libraryIntegrations } from "@/db/schema";
 import { createTestCaller } from "@/testing/harness";
+import { mockFileSystem } from "@/testing/memory-fs";
 
 function setup() {
   const { call, db } = createTestCaller();
-  const dir = mkdtempSync(join(tmpdir(), "formatarr-lib-"));
+  const dir = "/media/lib";
+  mockFileSystem({ [join(dir, "file.txt")]: "x" });
   const seedIntegration = async (name: string) => {
     const [row] = await db
       .insert(integrations)
@@ -38,7 +38,6 @@ describe("libraries CRUD", () => {
   test("create rejects invalid paths and unknown integrations", async () => {
     const { call, dir } = setup();
     const file = join(dir, "file.txt");
-    writeFileSync(file, "x");
     const base = { name: "movies", enabled: true, integrations: [] };
 
     expect(
@@ -149,7 +148,8 @@ describe("libraries scan scheduling", () => {
     const { call, db } = createTestCaller({
       schedulers: { scan: { scan: async () => {}, update, remove } },
     });
-    const dir = mkdtempSync(join(tmpdir(), "formatarr-lib-"));
+    const dir = "/media/lib";
+    mockFileSystem({ [join(dir, "file.txt")]: "x" });
     return { call, db, dir, update, remove };
   }
 

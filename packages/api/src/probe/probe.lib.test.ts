@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { files, libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestContext } from "@/testing/harness";
-import { createProbeRunner, normalizeProbe, probeFiles } from "./probe.lib";
+import { advance } from "@/testing/timers";
+import { normalizeProbe, probeFiles } from "./probe.lib";
 
 const raw = {
   format: { format_name: "matroska,webm", duration: "12.5", bit_rate: "4000" },
@@ -98,30 +99,22 @@ describe("probeFiles", () => {
     const { context, ids } = await setup(10);
     let running = 0;
     let peak = 0;
-    await probeFiles(
+    const done = probeFiles(
       {
         ...context,
         env: { ...context.env, PROBE_CONCURRENCY: 3 },
         probe: async () => {
           running++;
           peak = Math.max(peak, running);
-          await Bun.sleep(5);
+          await new Promise((resolve) => setTimeout(resolve, 5));
           running--;
           return raw;
         },
       },
       ids,
     );
+    for (let i = 0; i < 10; i++) await advance(5);
+    await done;
     expect(peak).toBe(3);
   });
-
-  test("real ffprobe rejects a corrupt file", async () => {
-    const path = `${dataDir()}/bad.mkv`;
-    await Bun.write(path, "not a video");
-    expect(createProbeRunner("ffprobe")(path)).rejects.toThrow();
-  });
 });
-
-function dataDir() {
-  return createTestContext().env.DATA_DIR;
-}

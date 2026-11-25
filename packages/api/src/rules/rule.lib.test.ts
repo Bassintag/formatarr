@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
   Condition,
@@ -14,6 +12,7 @@ import { files, jobs, libraries, rules } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { scanLibrary } from "@/scans/scans.lib";
 import { createTestContext } from "@/testing/harness";
+import { mockFileSystem } from "@/testing/memory-fs";
 import {
   createJobsForFiles,
   evaluateCondition,
@@ -426,8 +425,8 @@ describe("createJobsForFiles", () => {
 describe("scanLibrary integration", () => {
   test("creates jobs for probed files", async () => {
     const context = createTestContext();
-    const root = mkdtempSync(join(tmpdir(), "formatarr-rules-"));
-    await Bun.write(join(root, "movie.mkv"), "12345");
+    const root = "/media";
+    mockFileSystem({ [join(root, "movie.mkv")]: "12345" });
     const library = await firstOrThrow(
       context.db
         .insert(libraries)

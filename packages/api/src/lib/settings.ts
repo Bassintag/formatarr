@@ -1,5 +1,5 @@
-import { mkdirSync, watch } from "node:fs";
-import { mkdir, rename } from "node:fs/promises";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { memoize } from "es-toolkit";
@@ -13,10 +13,10 @@ export function createSettings(dataDir: string) {
   const path = join(dataDir, "config.yml");
 
   async function write(settings: Config) {
-    await mkdir(dirname(path), { recursive: true });
+    await fsp.mkdir(dirname(path), { recursive: true });
     const temp = `${path}.tmp`;
     await Bun.write(temp, Bun.YAML.stringify(settings, null, 2));
-    await rename(temp, path);
+    await fsp.rename(temp, path);
   }
 
   const load = memoize(async () => {
@@ -46,8 +46,8 @@ export function createSettings(dataDir: string) {
     return next;
   }
 
-  mkdirSync(dataDir, { recursive: true });
-  watch(dataDir, (_, filename) => {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.watch(dataDir, (_, filename) => {
     if (filename === "config.yml") load.cache.clear();
   }).unref();
 

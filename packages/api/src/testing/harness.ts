@@ -1,14 +1,11 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { MemoryPublisher } from "@orpc/publisher/memory";
 import { createRouterClient } from "@orpc/server";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import type { Context } from "@/context";
 import { createDb } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
-import { createSettings } from "@/lib/settings";
 import { router } from "@/router";
+import { ConfigSchema } from "@/settings/config.schema";
 
 export type TestContext = Context & { request: Request };
 
@@ -18,12 +15,12 @@ export function createTestContext(
   const db = createDb(":memory:");
   migrate(db, { migrationsFolder: `${import.meta.dir}/../../drizzle` });
 
-  const dataDir = mkdtempSync(join(tmpdir(), "formatarr-test-"));
+  let config = ConfigSchema.parse({});
 
   return {
     env: {
       API_PORT: 0,
-      DATA_DIR: dataDir,
+      DATA_DIR: "/data",
       DATABASE_URL: ":memory:",
       FFPROBE_PATH: "ffprobe",
       PROBE_CONCURRENCY: 4,
@@ -31,7 +28,15 @@ export function createTestContext(
     },
     db,
     logger: createLogger("silent"),
-    settings: createSettings(dataDir),
+    settings: {
+      read: async () => config,
+      update: async (patch) => {
+        config = ConfigSchema.parse({
+          auth: { ...config.auth, ...patch.auth },
+        });
+        return config;
+      },
+    },
     events: new MemoryPublisher(),
     probe: async () => ({
       format: {

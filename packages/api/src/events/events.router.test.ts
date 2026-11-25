@@ -5,7 +5,7 @@ import { createTestCaller } from "@/testing/harness";
 
 async function subscribed(stream: AsyncIterator<unknown>) {
   const first = stream.next();
-  await Bun.sleep(0);
+  await Promise.resolve();
   return { first };
 }
 

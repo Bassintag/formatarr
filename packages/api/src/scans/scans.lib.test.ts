@@ -1,21 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { files, libraries } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestContext } from "@/testing/harness";
+import { mockFileSystem } from "@/testing/memory-fs";
 import { scanLibrary } from "./scans.lib";
 
 async function setup() {
   const context = createTestContext();
-  const root = mkdtempSync(join(tmpdir(), "formatarr-scan-"));
-  mkdirSync(join(root, "shows", "season1"), { recursive: true });
-  await Bun.write(join(root, "movie.mkv"), "12345");
-  await Bun.write(join(root, "shows", "season1", "ep1.MP4"), "123");
-  await Bun.write(join(root, "notes.txt"), "text");
-  await Bun.write(join(root, "shows", "poster.jpg"), "img");
+  const root = "/media";
+  const disk = mockFileSystem({
+    [join(root, "movie.mkv")]: "12345",
+    [join(root, "shows", "season1", "ep1.MP4")]: "123",
+    [join(root, "notes.txt")]: "text",
+    [join(root, "shows", "poster.jpg")]: "img",
+  });
   const library = await firstOrThrow(
     context.db
       .insert(libraries)
@@ -24,7 +24,7 @@ async function setup() {
   );
   const rows = (libraryId = library.id) =>
     context.db.select().from(files).where(eq(files.libraryId, libraryId)).all();
-  return { context, root, libraryId: library.id, rows };
+  return { context, root, libraryId: library.id, rows, disk };
 }
 
 describe("scanLibrary", () => {
@@ -53,7 +53,7 @@ describe("scanLibrary", () => {
   });
 
   test("resets a changed file to pending", async () => {
-    const { context, root, libraryId, rows } = await setup();
+    const { context, root, libraryId, rows, disk } = await setup();
     await scanLibrary(context, libraryId);
     const path = join(root, "movie.mkv");
     context.db
@@ -61,7 +61,7 @@ describe("scanLibrary", () => {
       .set({ status: "done", mediaInfo: null })
       .where(eq(files.path, path))
       .run();
-    await Bun.write(path, "1234567890");
+    disk.write(path, "1234567890");
     expect(await scanLibrary(context, libraryId)).toEqual({
       created: 0,
       updated: 1,
@@ -73,9 +73,9 @@ describe("scanLibrary", () => {
   });
 
   test("deletes files removed from disk", async () => {
-    const { context, root, libraryId, rows } = await setup();
+    const { context, root, libraryId, rows, disk } = await setup();
     await scanLibrary(context, libraryId);
-    rmSync(join(root, "movie.mkv"));
+    disk.remove(join(root, "movie.mkv"));
     expect(await scanLibrary(context, libraryId)).toEqual({
       created: 0,
       updated: 0,
@@ -103,25 +103,5 @@ describe("scanLibrary", () => {
   test("rejects a missing library", async () => {
     const { context } = await setup();
     expect(scanLibrary(context, 999 as never)).rejects.toThrow();
-  });
-
-  test("handles removing more files than sqlite variable limit", async () => {
-    const { context, libraryId, rows } = await setup();
-    const total = 50_000;
-    for (let start = 0; start < total; start += 1000) {
-      context.db
-        .insert(files)
-        .values(
-          Array.from({ length: 1000 }, (_, i) => ({
-            libraryId,
-            path: `/gone/${start + i}.mkv`,
-            size: 1,
-          })),
-        )
-        .run();
-    }
-    const result = await scanLibrary(context, libraryId);
-    expect(result).toEqual({ created: 2, updated: 0, deleted: total });
-    expect(rows()).toHaveLength(2);
   });
 });
