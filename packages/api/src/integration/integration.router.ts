@@ -1,6 +1,7 @@
 import { count, eq } from "drizzle-orm";
 import { userAuth } from "@/auth/auth.middleware";
 import { integrations } from "@/db/schema";
+import { testConnection } from "@/integration/arr.lib";
 import { integrationOptions } from "@/integration/integration.options";
 import {
   firstOrThrow,
@@ -75,10 +76,24 @@ const remove = userIntegrations.remove.handler(({ context, input }) => {
   );
 });
 
+const test = userIntegrations.test.handler(({ context, input }) => {
+  return testConnection(
+    orThrow(
+      context.db.query.integrations
+        .findFirst({
+          ...integrationOptions,
+          where: { id: input.id },
+        })
+        .sync(),
+    ),
+  );
+});
+
 export const integrationsRouter = orpc.integrations.router({
   list,
   create,
   get,
   update,
   remove,
+  test,
 });

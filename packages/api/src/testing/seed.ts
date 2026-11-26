@@ -1,6 +1,15 @@
 import type { FileId, LibraryId, MediaInfo, RuleId } from "@formatarr/contract";
 import type { Context } from "@/context";
-import { files, jobRules, jobs, libraries, rules, workers } from "@/db/schema";
+import {
+  files,
+  integrations,
+  jobRules,
+  jobs,
+  libraries,
+  libraryIntegrations,
+  rules,
+  workers,
+} from "@/db/schema";
 
 type Db = Context["db"];
 type LibraryValues = Partial<typeof libraries.$inferInsert>;
@@ -8,6 +17,7 @@ type FileValues = Partial<typeof files.$inferInsert>;
 type RuleValues = Partial<typeof rules.$inferInsert>;
 type JobValues = Partial<typeof jobs.$inferInsert>;
 type WorkerValues = Partial<typeof workers.$inferInsert>;
+type IntegrationValues = Partial<typeof integrations.$inferInsert>;
 
 export const unknownId = 999 as never;
 
@@ -94,4 +104,33 @@ export function seedWorker(db: Db, values: WorkerValues = {}) {
     })
     .returning()
     .get();
+}
+
+export function seedIntegration(
+  db: Db,
+  libraryIds: LibraryId[] = [],
+  values: IntegrationValues = {},
+) {
+  const integration = db
+    .insert(integrations)
+    .values({
+      type: "radarr",
+      name: "arr",
+      baseUrl: "http://arr.test",
+      apiKey: "secret",
+      ...values,
+    })
+    .returning()
+    .get();
+  if (libraryIds.length > 0) {
+    db.insert(libraryIntegrations)
+      .values(
+        libraryIds.map((libraryId) => ({
+          libraryId,
+          integrationId: integration.id,
+        })),
+      )
+      .run();
+  }
+  return integration;
 }

@@ -45,6 +45,9 @@ export const IntegrationUpdateSchema = UpdateSchema(
 );
 export type IntegrationUpdate = z.infer<typeof IntegrationUpdateSchema>;
 
+export const IntegrationTestSchema = z.object({ version: z.string() });
+export type IntegrationTest = z.infer<typeof IntegrationTestSchema>;
+
 export const integrationsContract = orpc
   .route({ prefix: "/integrations", tags: ["integrations"] })
   .router({
@@ -68,4 +71,8 @@ export const integrationsContract = orpc
       .route({ method: "DELETE", path: "/{id}" })
       .input(IdParamsSchema(IntegrationIdSchema))
       .output(VoidSchema),
+    test: orpc
+      .route({ method: "POST", path: "/{id}/test" })
+      .input(IdParamsSchema(IntegrationIdSchema))
+      .output(IntegrationTestSchema),
   });
