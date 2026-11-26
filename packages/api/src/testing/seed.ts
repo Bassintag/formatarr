@@ -81,7 +81,6 @@ export function seedWorker(db: Db, values: WorkerValues = {}) {
     .values({
       name: "w",
       tokenHash: "h",
-      capabilities: { ffmpegVersion: "7.0", hwaccels: [] },
       ...values,
     })
     .returning()

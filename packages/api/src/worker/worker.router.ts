@@ -38,7 +38,6 @@ const create = userWorkers.create.handler(({ context, input }) => {
       .insert(workers)
       .values({
         name: input.name,
-        capabilities: input.capabilities,
         tokenHash: hashWorkerToken(token),
       })
       .returning({ id: workers.id })

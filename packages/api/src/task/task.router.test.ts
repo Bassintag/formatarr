@@ -8,7 +8,6 @@ async function setup() {
   const { call, context, db } = createTestCaller();
   const created = await call.workers.create({
     name: "w",
-    capabilities: { ffmpegVersion: "7.0", hwaccels: [] },
   });
   const request = new Request("http://localhost", {
     headers: { authorization: `Bearer ${created.token}` },
@@ -195,7 +194,6 @@ describe("tasks.stream", () => {
     await first.stream.next();
     const created = await call.workers.create({
       name: "other",
-      capabilities: { ffmpegVersion: "7.0", hwaccels: [] },
     });
     const request = new Request("http://localhost", {
       headers: { authorization: `Bearer ${created.token}` },

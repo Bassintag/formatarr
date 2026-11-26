@@ -5,8 +5,6 @@ import { createTestCaller } from "@/testing/harness";
 import { seedFile, seedJob, seedLibrary, unknownId } from "@/testing/seed";
 import { hashWorkerToken } from "@/worker/worker.lib";
 
-const capabilities = { ffmpegVersion: "7.0", hwaccels: ["vaapi"] };
-
 function withToken(token: string) {
   return new Request("http://localhost", {
     headers: { authorization: `Bearer ${token}` },
@@ -23,7 +21,7 @@ function setup() {
 describe("workers CRUD", () => {
   test("create returns the token once and stores only its hash", async () => {
     const { call, db } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
+    const created = await call.workers.create({ name: "w1" });
 
     expect(created.token).toStartWith("fmw_");
     expect(created).not.toHaveProperty("tokenHash");
@@ -40,7 +38,7 @@ describe("workers CRUD", () => {
   test("list paginates", async () => {
     const { call } = setup();
     for (const name of ["a", "b", "c"]) {
-      await call.workers.create({ name, capabilities });
+      await call.workers.create({ name });
     }
 
     const page = await call.workers.list({ page: 1, pageSize: 2 });
@@ -50,7 +48,7 @@ describe("workers CRUD", () => {
 
   test("update changes only provided fields", async () => {
     const { call } = setup();
-    const { id } = await call.workers.create({ name: "w1", capabilities });
+    const { id } = await call.workers.create({ name: "w1" });
 
     const updated = await call.workers.update({
       id,
@@ -64,7 +62,7 @@ describe("workers CRUD", () => {
 
   test("remove deletes the worker", async () => {
     const { call } = setup();
-    const { id } = await call.workers.create({ name: "w1", capabilities });
+    const { id } = await call.workers.create({ name: "w1" });
 
     await call.workers.remove({ id });
     expect(call.workers.get({ id })).rejects.toMatchObject({
@@ -101,7 +99,7 @@ describe("workers CRUD", () => {
 describe("running jobs", () => {
   test("removing a worker requeues its running jobs", async () => {
     const { call, db } = setup();
-    const worker = await call.workers.create({ name: "w1", capabilities });
+    const worker = await call.workers.create({ name: "w1" });
     const library = seedLibrary(db);
     const file = seedFile(db, library.id, { status: "processing" });
     const job = seedJob(db, file.id, [], {
@@ -126,7 +124,7 @@ describe("running jobs", () => {
 
   test("only running jobs are exposed", async () => {
     const { call, db } = setup();
-    const worker = await call.workers.create({ name: "w1", capabilities });
+    const worker = await call.workers.create({ name: "w1" });
     const library = seedLibrary(db);
     const file = seedFile(db, library.id);
     const base = { fileId: file.id, workerId: worker.id };
@@ -152,7 +150,7 @@ describe("running jobs", () => {
 describe("worker token", () => {
   test("regenerate replaces the previous token", async () => {
     const { call, asWorker } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
+    const created = await call.workers.create({ name: "w1" });
     const { token } = await call.workers.regenerateToken({ id: created.id });
 
     expect(token).not.toBe(created.token);
@@ -164,7 +162,7 @@ describe("worker token", () => {
 
   test("valid token passes the worker middleware", async () => {
     const { call, asWorker } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
+    const created = await call.workers.create({ name: "w1" });
 
     expect(asWorker(created.token).tasks.stream()).resolves.toBeDefined();
   });
@@ -179,7 +177,7 @@ describe("worker token", () => {
 
   test("disabled worker is rejected", async () => {
     const { call, asWorker } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
+    const created = await call.workers.create({ name: "w1" });
     await call.workers.update({ id: created.id, enabled: false });
 
     expect(asWorker(created.token).tasks.stream()).rejects.toMatchObject({
@@ -197,7 +195,7 @@ describe("worker token", () => {
 
   test("worker token is rejected on user routes", async () => {
     const { call, asWorker } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
+    const created = await call.workers.create({ name: "w1" });
 
     expect(asWorker(created.token).workers.list({})).rejects.toMatchObject({
       code: "UNAUTHORIZED",

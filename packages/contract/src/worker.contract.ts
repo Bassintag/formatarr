@@ -12,12 +12,6 @@ import { orpc } from "./orpc";
 export const WorkerStatusSchema = z.enum(["online", "offline"]);
 export type WorkerStatus = z.infer<typeof WorkerStatusSchema>;
 
-export const WorkerCapabilitiesSchema = z.object({
-  ffmpegVersion: z.string(),
-  hwaccels: z.array(z.string()),
-});
-export type WorkerCapabilities = z.infer<typeof WorkerCapabilitiesSchema>;
-
 export const PathMappingSchema = z.object({
   from: z.string(),
   to: z.string(),
@@ -29,7 +23,6 @@ export const WorkerSchema = z.object({
   name: z.string(),
   status: WorkerStatusSchema,
   enabled: z.boolean(),
-  capabilities: WorkerCapabilitiesSchema,
   pathMappings: z.array(PathMappingSchema),
   runningJobs: z.array(z.object({ id: JobIdSchema })),
   lastSeenAt: z.date().nullable(),
@@ -48,12 +41,11 @@ export type WorkerToken = z.infer<typeof WorkerTokenSchema>;
 
 export const WorkerCreateSchema = z.object({
   name: z.string().min(1),
-  capabilities: WorkerCapabilitiesSchema,
 });
 export type WorkerCreate = z.infer<typeof WorkerCreateSchema>;
 
 export const WorkerUpdateSchema = UpdateSchema(
-  WorkerCreateSchema.omit({ capabilities: true }).extend({
+  WorkerCreateSchema.extend({
     enabled: z.boolean(),
     pathMappings: z.array(PathMappingSchema),
   }),
