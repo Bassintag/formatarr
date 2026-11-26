@@ -2,6 +2,7 @@ import type { ApiClient, JobId, JobUpdate, Task } from "@formatarr/contract";
 import { ORPCError } from "@orpc/client";
 import { delay } from "es-toolkit";
 import type { Transcode } from "@/lib/ffmpeg/run";
+import { createJobLogger, errorMessage, type JobLogger } from "@/lib/logger";
 import { processTask, type TransferContext } from "@/lib/transfer";
 
 const HEARTBEAT_INTERVAL = 2000;
@@ -13,19 +14,16 @@ type Heartbeat = {
   progress: () => number;
   signal: AbortSignal;
   onGone: () => void;
+  logger: JobLogger;
 };
 
 function isNotFound(error: unknown) {
   return error instanceof ORPCError && error.code === "NOT_FOUND";
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
 async function sendHeartbeats(
   client: ApiClient,
-  { id, progress, signal, onGone }: Heartbeat,
+  { id, progress, signal, onGone, logger }: Heartbeat,
 ) {
   while (!signal.aborted) {
     try {
@@ -34,7 +32,7 @@ async function sendHeartbeats(
     } catch (error) {
       if (signal.aborted) return;
       if (isNotFound(error)) return onGone();
-      console.error(`job ${id} heartbeat failed:`, errorMessage(error));
+      logger.error(`Heartbeat failed: ${errorMessage(error)}`);
     }
   }
 }
@@ -43,6 +41,7 @@ async function reportFailure(
   client: ApiClient,
   update: JobUpdate,
   signal: AbortSignal,
+  logger: JobLogger,
 ) {
   for (let attempts = 0; !signal.aborted; attempts++) {
     try {
@@ -50,7 +49,7 @@ async function reportFailure(
       return;
     } catch (error) {
       if (signal.aborted || isNotFound(error)) return;
-      console.error(`job ${update.id} report failed:`, errorMessage(error));
+      logger.error(`Report failed: ${errorMessage(error)}`);
       const backoff = Math.min(100 * 2 ** attempts, 10_000);
       await delay(backoff, { signal }).catch(() => {});
     }
@@ -67,29 +66,34 @@ export async function runJob(
   const cancellation = new AbortController();
   const finished = new AbortController();
   const jobSignal = AbortSignal.any([signal, cancellation.signal]);
+  const logger = createJobLogger(context.client, id, jobSignal);
   let progress = 0;
   void sendHeartbeats(context.client, {
     id,
     progress: () => progress,
     signal: AbortSignal.any([jobSignal, finished.signal]),
     onGone: () => cancellation.abort(),
+    logger,
   });
   try {
     await processTask(context, task, transcode, {
       signal: jobSignal,
+      logger,
       onProgress: (value) => {
         progress = value;
       },
     });
   } catch (error) {
-    finished.abort();
     if (jobSignal.aborted) return;
     const message = errorMessage(error);
     console.error(`job ${id} failed:`, message);
+    await logger.flush();
+    finished.abort();
     await reportFailure(
       context.client,
       { id, progress, status: "failed", error: message },
       signal,
+      logger,
     );
   } finally {
     finished.abort();

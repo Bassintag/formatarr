@@ -7,7 +7,9 @@ import { createSettings } from "@/lib/settings";
 import { createWorkers } from "@/lib/workers";
 import { createProbeRunner } from "@/probe/probe.lib";
 import { createScanScheduler } from "@/scan/scan.scheduler";
-import { requeueJobs } from "@/task/task.lib";
+import { expireJobs, interruptJobs } from "@/task/task.lib";
+
+const EXPIRY_INTERVAL_MS = 5000;
 
 export function createPrimitiveContext() {
   const env = createEnv();
@@ -27,7 +29,15 @@ export type PrimitiveContext = ReturnType<typeof createPrimitiveContext>;
 
 export async function createContext() {
   const context = createPrimitiveContext();
-  context.db.transaction((tx) => requeueJobs(tx));
+  const { maxRetries } = (await context.settings.read()).jobs;
+  context.db.transaction((tx) =>
+    interruptJobs(tx, { reason: "API restarted", maxRetries }),
+  );
+  setInterval(() => {
+    expireJobs(context).catch((err) =>
+      context.logger.error({ err }, "job expiry failed"),
+    );
+  }, EXPIRY_INTERVAL_MS).unref();
 
   return {
     ...context,

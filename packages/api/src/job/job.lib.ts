@@ -7,11 +7,13 @@ import type {
   RuleId,
   RuleValue,
 } from "@formatarr/contract";
+import { ORPCError } from "@orpc/server";
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files, jobRules, jobs, rules as rulesTable } from "@/db/schema";
 import { jobOptions } from "@/job/job.options";
 import { orThrow, type Tx } from "@/lib/db";
+import { probeFiles } from "@/probe/probe.lib";
 import { findUnmetRules } from "@/rules/rule.lib";
 import { dispatchTasks, publishJobStatus } from "@/task/task.lib";
 
@@ -107,7 +109,51 @@ export async function createJobsForFiles(
   await publishJobStatus(events, createdJobs, "queued");
   if (createdJobs.length > 0) await dispatchTasks(context);
 
-  return createdJobs.length;
+  return createdJobs;
+}
+
+export async function createJob(
+  context: Pick<
+    Context,
+    "db" | "env" | "events" | "logger" | "probe" | "workers"
+  >,
+  fileId: FileId,
+) {
+  const { db } = context;
+  const file = db.transaction((tx) => {
+    const file = orThrow(
+      tx.query.files
+        .findFirst({
+          columns: { mediaInfo: true },
+          with: {
+            jobs: {
+              columns: { id: true },
+              where: { status: { in: ["queued", "running"] } },
+            },
+          },
+          where: { id: fileId },
+        })
+        .sync(),
+    );
+    if (file.jobs.length > 0) {
+      throw new ORPCError("CONFLICT", {
+        message: "File already has an active job",
+      });
+    }
+    tx.update(files)
+      .set({ status: "pending" })
+      .where(eq(files.id, fileId))
+      .run();
+    return file;
+  });
+  if (!file.mediaInfo) await probeFiles(context, [fileId]);
+  const [id] = await createJobsForFiles(context, [fileId]);
+  if (!id) {
+    throw new ORPCError("CONFLICT", {
+      message: "No job to create for this file",
+    });
+  }
+  return getJob(db, id);
 }
 
 export async function reevaluateLibrary(

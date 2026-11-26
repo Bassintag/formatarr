@@ -25,12 +25,25 @@ export const JobSchema = z.object({
   status: JobStatusSchema,
   workerId: WorkerIdSchema.nullable(),
   progress: z.number(),
+  attempts: z.int().nonnegative(),
   error: z.string().nullable(),
   createdAt: z.date(),
   startedAt: z.date().nullable(),
   finishedAt: z.date().nullable(),
 });
 export type Job = z.infer<typeof JobSchema>;
+
+export const JobLogSchema = z.object({
+  message: z.string(),
+  createdAt: z.date(),
+});
+export type JobLog = z.infer<typeof JobLogSchema>;
+
+export const JobLogCreateSchema = z.object({
+  id: JobIdSchema,
+  message: z.string().min(1),
+});
+export type JobLogCreate = z.infer<typeof JobLogCreateSchema>;
 
 export const ListJobsInputSchema = PaginationSchema.extend({
   status: JobStatusSchema.optional(),
@@ -72,6 +85,15 @@ export const jobsContract = orpc
       .route({ method: "GET", path: "/{id}" })
       .input(IdParamsSchema(JobIdSchema))
       .output(JobSchema),
+    logs: orpc
+      .route({ method: "GET", path: "/{id}/logs" })
+      .input(IdParamsSchema(JobIdSchema))
+      .output(z.array(JobLogSchema)),
+    createLog: orpc
+      .meta(workerMeta)
+      .route({ method: "POST", path: "/{id}/logs" })
+      .input(JobLogCreateSchema)
+      .output(JobLogSchema),
     update: orpc
       .meta(workerMeta)
       .route({ method: "PATCH", path: "/{id}" })

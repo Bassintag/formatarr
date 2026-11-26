@@ -39,7 +39,15 @@ async function fakeFfmpeg(script: string) {
 
 function options(signal = new AbortController().signal) {
   const progress: number[] = [];
+  const lines: string[] = [];
+  const logger = {
+    info: (line: string) => lines.push(line),
+    error: (line: string) => lines.push(line),
+    flush: async () => {},
+  };
   return {
+    lines,
+    logger,
     progress,
     signal,
     onProgress: (value: number) => progress.push(value),
@@ -66,6 +74,17 @@ describe("createTranscoder", () => {
       "pipe:1",
       ...buildFfmpegArgs(input()),
     ]);
+  });
+
+  test("logs the command and every stderr line", async () => {
+    const transcode = await fakeFfmpeg("printf 'first\\n\\nsecond\\nlast' >&2");
+    const run = options();
+
+    await transcode(input(), run);
+
+    const [command, ...stderr] = run.lines;
+    expect(command).toContain("-i source.mkv");
+    expect(stderr).toEqual(["first", "second", "last"]);
   });
 
   test("turns the output time into a percentage below 100", async () => {
@@ -105,7 +124,7 @@ describe("createTranscoder", () => {
     const controller = new AbortController();
 
     const run = transcode(input(), {
-      signal: controller.signal,
+      ...options(controller.signal),
       onProgress: () => controller.abort(),
     });
 

@@ -1,13 +1,13 @@
 import type { Job } from "@formatarr/contract";
-import { ORPCError } from "@orpc/server";
 import { count, eq, type SQL } from "drizzle-orm";
 import { userAuth, workerAuth } from "@/auth/auth.middleware";
 import { jobs } from "@/db/schema";
-import { getJob } from "@/job/job.lib";
+import { createJob, getJob } from "@/job/job.lib";
 import { jobOptions } from "@/job/job.options";
 import { openSource, receiveResult } from "@/job/transfer.lib";
 import { buildWhere, firstOrThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
+import { createLog, logs } from "@/log/log.router";
 import { dispatchTasks, updateJob } from "@/task/task.lib";
 
 const list = orpc.jobs.use(userAuth).list.handler(({ context, input }) => {
@@ -39,9 +39,8 @@ const list = orpc.jobs.use(userAuth).list.handler(({ context, input }) => {
   return { ...page, items: page.items as Job[] };
 });
 
-const create = orpc.jobs.use(userAuth).create.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
+const create = orpc.jobs.use(userAuth).create.handler(({ context, input }) => {
+  return createJob(context, input.fileId);
 });
 
 const get = orpc.jobs.use(userAuth).get.handler(({ context, input }) => {
@@ -87,6 +86,8 @@ export const jobsRouter = orpc.jobs.router({
   list,
   create,
   get,
+  logs,
+  createLog,
   update,
   source,
   result,

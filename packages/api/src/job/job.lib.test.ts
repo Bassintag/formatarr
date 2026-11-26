@@ -84,8 +84,8 @@ describe("createJobsForFiles", () => {
     }) as typeof context.events.publish;
 
     const count = await createJobsForFiles(context, [f.id]);
-    expect(count).toBe(1);
     const [job] = allJobs();
+    expect(count).toEqual([job?.id as JobId]);
     expect(job).toMatchObject({ fileId: f.id, status: "queued" });
     expect(jobRuleIds(job?.id)).toEqual([rule.id]);
     expect(fileStatus(f.id)).toBe("queued");
@@ -115,7 +115,7 @@ describe("createJobsForFiles", () => {
     await addRule({ type: "container", value: "mkv" });
     await addRule({ type: "subtitleLanguages", value: ["eng"] });
     const f = await addFile("a.mkv");
-    expect(await createJobsForFiles(context, [f.id])).toBe(0);
+    expect(await createJobsForFiles(context, [f.id])).toEqual([]);
     expect(allJobs()).toHaveLength(0);
     expect(fileStatus(f.id)).toBe("done");
   });
@@ -139,7 +139,7 @@ describe("createJobsForFiles", () => {
       (await addFile("failed.mkv", { status: "failed" })).id,
       raw.id,
     ];
-    expect(await createJobsForFiles(context, ids)).toBe(0);
+    expect(await createJobsForFiles(context, ids)).toEqual([]);
     expect(allJobs()).toHaveLength(0);
     expect(fileStatus(raw.id)).toBe("pending");
   });
@@ -149,7 +149,7 @@ describe("createJobsForFiles", () => {
     await addRule({ type: "container", value: "mp4" });
     const f = await addFile("a.mkv");
     await createJobsForFiles(context, [f.id]);
-    expect(await createJobsForFiles(context, [f.id])).toBe(0);
+    expect(await createJobsForFiles(context, [f.id])).toEqual([]);
     expect(allJobs()).toHaveLength(1);
   });
 
@@ -158,7 +158,7 @@ describe("createJobsForFiles", () => {
     const other = seedLibrary(context.db, { name: "other" });
     await addRule({ type: "container", value: "mp4" }, { libraryId: other.id });
     const f = await addFile("a.mkv");
-    expect(await createJobsForFiles(context, [f.id])).toBe(0);
+    expect(await createJobsForFiles(context, [f.id])).toEqual([]);
     expect(allJobs()).toHaveLength(0);
   });
 });

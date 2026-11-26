@@ -12,6 +12,7 @@ const job = {
   progress: 42,
   error: null,
   createdAt: new Date(),
+  attempts: 0,
   startedAt: null,
   finishedAt: null,
 };

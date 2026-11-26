@@ -19,7 +19,7 @@ import { OpenAPILink } from "@orpc/openapi/fetch";
 import { createFetchHandler } from "@/app";
 import { files, jobs } from "@/db/schema";
 import { scanLibrary } from "@/scan/scan.lib";
-import { requeueJobs } from "@/task/task.lib";
+import { interruptJobs } from "@/task/task.lib";
 import { createTestCaller } from "@/testing/harness";
 import {
   sampleMediaInfo,
@@ -292,7 +292,9 @@ describe("jobs.result", () => {
     const state = await setup();
     const { db, owner, job } = state;
     const body = during(() => {
-      db.transaction((tx) => requeueJobs(tx));
+      db.transaction((tx) =>
+        interruptJobs(tx, { reason: "lost", maxRetries: 2 }),
+      );
       db.update(jobs)
         .set({
           status: "running",

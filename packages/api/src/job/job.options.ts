@@ -8,6 +8,7 @@ export const jobOptions = {
     workerId: true,
     status: true,
     progress: true,
+    attempts: true,
     error: true,
     createdAt: true,
     startedAt: true,

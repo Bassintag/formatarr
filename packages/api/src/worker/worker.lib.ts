@@ -5,7 +5,11 @@ import { eq } from "drizzle-orm";
 import type { Context } from "@/context";
 import { workers } from "@/db/schema";
 import { orThrow, type Tx } from "@/lib/db";
-import { dispatchTasks, publishJobStatus, requeueJobs } from "@/task/task.lib";
+import {
+  dispatchTasks,
+  interruptJobs,
+  publishInterrupted,
+} from "@/task/task.lib";
 import { workerOptions } from "@/worker/worker.options";
 
 const TOKEN_PREFIX = "fmw_";
@@ -42,7 +46,7 @@ export function findWorker(
   return withStatus(context, worker);
 }
 
-function touchWorker(db: Context["db"] | Tx, id: WorkerId) {
+export function touchWorker(db: Context["db"] | Tx, id: WorkerId) {
   db.update(workers)
     .set({ lastSeenAt: new Date() })
     .where(eq(workers.id, id))
@@ -61,17 +65,21 @@ export async function connectWorker(
   return messages;
 }
 
-export async function disconnectWorker(context: WorkerContext, id: WorkerId) {
+export async function disconnectWorker(
+  context: WorkerContext & Pick<Context, "settings">,
+  id: WorkerId,
+) {
   context.workers.disconnect(id);
-  const requeued = context.db.transaction((tx) => {
+  const { maxRetries } = (await context.settings.read()).jobs;
+  const interrupted = context.db.transaction((tx) => {
     touchWorker(tx, id);
-    return requeueJobs(tx, id);
+    return interruptJobs(tx, {
+      workerId: id,
+      reason: "Worker disconnected",
+      maxRetries,
+    });
   });
-  await publishJobStatus(
-    context.events,
-    requeued.map((job) => job.id),
-    "queued",
-  );
+  await publishInterrupted(context.events, interrupted);
   await context.events.publish("event", { type: "worker.disconnected", id });
   await dispatchTasks(context);
 }

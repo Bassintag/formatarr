@@ -44,6 +44,7 @@ export function createTestContext(
       update: async (patch) => {
         config = ConfigSchema.parse({
           auth: { ...config.auth, ...patch.auth },
+          jobs: { ...config.jobs, ...patch.jobs },
         });
         return config;
       },

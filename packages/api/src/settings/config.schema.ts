@@ -1,3 +1,4 @@
+import { JobSettingsSchema } from "@formatarr/contract";
 import { z } from "zod";
 
 function generateSecret() {
@@ -6,7 +7,15 @@ function generateSecret() {
   );
 }
 
+const { maxRetries, timeoutSeconds } = JobSettingsSchema.shape;
+
 export const ConfigSchema = z.object({
+  jobs: z
+    .object({
+      maxRetries: maxRetries.default(2),
+      timeoutSeconds: timeoutSeconds.default(60),
+    })
+    .prefault({}),
   auth: z
     .object({
       username: z.string().default(""),
@@ -19,4 +28,7 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-export type ConfigUpdate = { auth?: Partial<Config["auth"]> };
+export type ConfigUpdate = {
+  auth?: Partial<Config["auth"]>;
+  jobs?: Partial<Config["jobs"]>;
+};
