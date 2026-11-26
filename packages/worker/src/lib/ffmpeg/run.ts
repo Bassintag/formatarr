@@ -1,4 +1,5 @@
 import { buildFfmpegArgs, type TranscodeInput } from "@/lib/ffmpeg/command";
+import type { Accelerators } from "@/lib/ffmpeg/encoders";
 
 const STDERR_TAIL_LENGTH = 4096;
 
@@ -43,7 +44,10 @@ function parseProgress(line: string, durationSeconds: number) {
   return Math.min(percent, 99);
 }
 
-export function createTranscoder(ffmpegPath: string): Transcode {
+export function createTranscoder(
+  ffmpegPath: string,
+  accelerators: Accelerators = {},
+): Transcode {
   return async (input, { signal, onProgress }) => {
     signal.throwIfAborted();
     const ffmpeg = Bun.spawn(
@@ -55,7 +59,7 @@ export function createTranscoder(ffmpegPath: string): Transcode {
         "-nostats",
         "-progress",
         "pipe:1",
-        ...buildFfmpegArgs(input),
+        ...buildFfmpegArgs(input, accelerators),
       ],
       { stdout: "pipe", stderr: "pipe", signal, killSignal: "SIGKILL" },
     );

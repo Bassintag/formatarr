@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MediaInfo, RuleValue } from "@formatarr/contract";
 import { buildFfmpegArgs, type TranscodeInput } from "@/lib/ffmpeg/command";
+import type { Accelerators } from "@/lib/ffmpeg/encoders";
 
 const mediaInfo: MediaInfo = {
   container: "mkv",
@@ -11,13 +12,20 @@ const mediaInfo: MediaInfo = {
   subtitles: [],
 };
 
-function build(rules: RuleValue[], info: Partial<MediaInfo> = {}) {
-  return buildFfmpegArgs({
-    job: { rules: rules.map((rule) => ({ ...rule, enabled: true })) },
-    sourcePath: "/media/in.mkv",
-    outputPath: "/media/out.mkv",
-    mediaInfo: { ...mediaInfo, ...info },
-  } as TranscodeInput);
+function build(
+  rules: RuleValue[],
+  info: Partial<MediaInfo> = {},
+  accelerators: Accelerators = {},
+) {
+  return buildFfmpegArgs(
+    {
+      job: { rules: rules.map((rule) => ({ ...rule, enabled: true })) },
+      sourcePath: "/media/in.mkv",
+      outputPath: "/media/out.mkv",
+      mediaInfo: { ...mediaInfo, ...info },
+    } as TranscodeInput,
+    accelerators,
+  );
 }
 
 function option(args: string[], name: string) {
@@ -135,6 +143,90 @@ describe("buildFfmpegArgs", () => {
 
       expect(option(args, "-crf")).toBe("32");
       expect(option(args, "-b:v")).toBe("0");
+    });
+  });
+
+  describe("hardware acceleration", () => {
+    test.each([
+      ["nvenc", ["-cq", "28", "-b:v", "0"]],
+      ["qsv", ["-global_quality", "28"]],
+      ["vaapi", ["-global_quality", "28"]],
+    ] as const)(
+      "encodes with %s at constant quality",
+      (accelerator, quality) => {
+        const args = build(
+          [{ type: "videoCodec", value: "hevc" }],
+          {},
+          { hevc: accelerator },
+        );
+
+        expect(option(args, "-c:v")).toBe(`hevc_${accelerator}`);
+        expect(args.join(" ")).toContain(quality.join(" "));
+      },
+    );
+
+    test("scales before uploading the frames to the vaapi device", () => {
+      const args = build(
+        [{ type: "maxResolution", value: 720 }],
+        {},
+        { hevc: "vaapi" },
+      );
+
+      expect(args.indexOf("-init_hw_device")).toBeLessThan(args.indexOf("-i"));
+      expect(option(args, "-filter_hw_device")).toBe("hw");
+      expect(option(args, "-filter:v")).toBe(
+        "scale=-2:720,format=nv12|p010le,hwupload",
+      );
+    });
+
+    test("encodes h264 in 8 bits", () => {
+      const args = build(
+        [{ type: "videoCodec", value: "h264" }],
+        {},
+        { h264: "nvenc" },
+      );
+
+      expect(option(args, "-filter:v")).toBe("format=nv12");
+      expect(args).not.toContain("-init_hw_device");
+    });
+
+    test("uses the wider quality scale of vaapi for av1", () => {
+      const args = build(
+        [{ type: "videoCodec", value: "av1" }],
+        {},
+        { av1: "vaapi" },
+      );
+
+      expect(option(args, "-global_quality")).toBe("140");
+    });
+
+    test("gives a max rate to the av1 hardware encoders", () => {
+      const args = build(
+        [
+          { type: "videoCodec", value: "av1" },
+          { type: "maxBitrate", value: 3000 },
+        ],
+        {},
+        { av1: "vaapi" },
+      );
+
+      expect(option(args, "-maxrate")).toBe("3000");
+      expect(args).not.toContain("-global_quality");
+    });
+
+    test("falls back to software for a codec without accelerator", () => {
+      const args = build(
+        [{ type: "videoCodec", value: "vp9" }],
+        {},
+        { hevc: "vaapi" },
+      );
+
+      expect(option(args, "-c:v")).toBe("libvpx-vp9");
+      expect(args).not.toContain("-init_hw_device");
+    });
+
+    test("does not use the device when the video is copied", () => {
+      expect(build([], {}, { hevc: "vaapi" })).toEqual(build([]));
     });
   });
 

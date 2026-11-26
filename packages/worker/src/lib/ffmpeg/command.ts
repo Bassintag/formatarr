@@ -4,31 +4,38 @@ import {
   MAX_CHANNELS,
   MP4_AUDIO_CODECS,
   TEXT_SUBTITLE_CODECS,
-  VIDEO_ENCODERS,
 } from "@/lib/ffmpeg/codecs";
+import { type Accelerators, videoEncoder } from "@/lib/ffmpeg/encoders";
 import { createPlan, type Plan } from "@/lib/ffmpeg/plan";
 import { applyRule } from "@/lib/ffmpeg/translators";
 
 const TARGET_BITRATE_RATIO = 0.9;
 
-function videoArgs({ video }: Plan, sourceCodec: string) {
-  if (!video) return [];
+function videoArgs(
+  { video }: Plan,
+  sourceCodec: string,
+  accelerators: Accelerators,
+) {
+  if (!video) return { globalArgs: [], args: [] };
   const codec =
     video.codec ?? VideoCodecSchema.safeParse(sourceCodec).data ?? "h264";
-  const args = ["-c:v", VIDEO_ENCODERS[codec]];
+  const encoder = videoEncoder(codec, accelerators[codec]);
+  const args = ["-c:v", encoder.name];
 
+  const filters = [...encoder.filters];
   if (video.height) {
-    args.push("-filter:v", `scale=-2:${video.height - (video.height % 2)}`);
+    filters.unshift(`scale=-2:${video.height - (video.height % 2)}`);
   }
+  if (filters.length > 0) args.push("-filter:v", filters.join(","));
 
   const max = video.maxBitrate;
   if (max) {
     args.push("-b:v", `${Math.floor(max * TARGET_BITRATE_RATIO)}`);
-    if (codec !== "av1") {
+    if (encoder.name !== "libsvtav1") {
       args.push("-maxrate", `${max}`, "-bufsize", `${max * 2}`);
     }
-  } else if (codec === "vp9") {
-    args.push("-crf", "32", "-b:v", "0");
+  } else {
+    args.push(...encoder.qualityArgs);
   }
 
   args.push(
@@ -37,7 +44,7 @@ function videoArgs({ video }: Plan, sourceCodec: string) {
     "-metadata:s:v:0",
     "BPS-eng=",
   );
-  return args;
+  return { globalArgs: encoder.globalArgs, args };
 }
 
 function audioArgs({ container, audio }: Plan) {
@@ -94,23 +101,23 @@ export type TranscodeInput = Pick<Task, "job" | "mediaInfo"> & {
   outputPath: string;
 };
 
-export function buildFfmpegArgs({
-  job,
-  sourcePath,
-  outputPath,
-  mediaInfo,
-}: TranscodeInput) {
+export function buildFfmpegArgs(
+  { job, sourcePath, outputPath, mediaInfo }: TranscodeInput,
+  accelerators: Accelerators = {},
+) {
   const plan = job.rules
     .filter((rule) => rule.enabled)
     .reduce(applyRule, createPlan(mediaInfo));
+  const video = videoArgs(plan, mediaInfo.video.codec, accelerators);
 
   return [
+    ...video.globalArgs,
     "-i",
     sourcePath,
     ...mapArgs(plan),
     "-c",
     "copy",
-    ...videoArgs(plan, mediaInfo.video.codec),
+    ...video.args,
     ...audioArgs(plan),
     ...subtitleArgs(plan),
     outputPath,
