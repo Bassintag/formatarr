@@ -65,7 +65,7 @@ describe("normalizeProbe", () => {
 });
 
 describe("probeFiles", () => {
-  test("stores media info and publishes events", async () => {
+  test("stores media info", async () => {
     const { context, ids } = await setup(2);
     await probeFiles({ ...context, probe: async () => raw }, ids);
     const rows = context.db.select().from(files).all();

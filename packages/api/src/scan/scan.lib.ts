@@ -51,7 +51,7 @@ export async function scanLibrary(
   context: ScanContext,
   libraryId: LibraryId,
 ): Promise<ScanResult> {
-  const { db, events } = context;
+  const { db } = context;
   const library = orThrow(
     db.query.libraries.findFirst({ where: { id: libraryId } }).sync(),
   );
@@ -106,14 +106,6 @@ export async function scanLibrary(
     }
   });
 
-  const changes = [
-    ...created.map((id) => ({ change: "created" as const, id })),
-    ...updated.map((id) => ({ change: "updated" as const, id })),
-    ...deleted.map((id) => ({ change: "deleted" as const, id })),
-  ];
-  for (const { change, id } of changes) {
-    await events.publish("event", { resource: "file", change, id });
-  }
   if (deleted.length > 0) await dispatchTasks(context);
 
   await probeFiles(context, [...created, ...updated]);

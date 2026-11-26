@@ -1,4 +1,9 @@
-import type { FileId, JobId, JobUpdate, WorkerId } from "@formatarr/contract";
+import type {
+  JobId,
+  JobStatus,
+  JobUpdate,
+  WorkerId,
+} from "@formatarr/contract";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files, jobs } from "@/db/schema";
@@ -8,18 +13,13 @@ import { MAX_RUNNING_JOBS } from "@/worker/worker.options";
 
 type TaskContext = Pick<Context, "db" | "events" | "workers">;
 
-export async function publishJobUpdates(
+export async function publishJobStatus(
   events: Context["events"],
-  rows: { id: JobId; fileId?: FileId }[],
+  ids: JobId[],
+  status: JobStatus,
 ) {
-  for (const { id, fileId } of rows) {
-    await events.publish("event", { resource: "job", change: "updated", id });
-    if (!fileId) continue;
-    await events.publish("event", {
-      resource: "file",
-      change: "updated",
-      id: fileId,
-    });
+  for (const id of ids) {
+    await events.publish("event", { type: "job.status", id, status });
   }
 }
 
@@ -59,9 +59,10 @@ export function claimTask(db: Context["db"], workerId: WorkerId) {
 
 export async function dispatchTasks(context: TaskContext) {
   const tasks = context.workers.dispatch((id) => claimTask(context.db, id));
-  await publishJobUpdates(
+  await publishJobStatus(
     context.events,
-    tasks.map((task) => task.job),
+    tasks.map((task) => task.job.id),
+    "running",
   );
 }
 
@@ -71,7 +72,7 @@ export async function updateJob(
   { id, ...changes }: JobUpdate,
 ) {
   const { status } = changes;
-  const fileId = context.db.transaction((tx) => {
+  context.db.transaction((tx) => {
     const job = firstOrThrow(
       tx
         .update(jobs)
@@ -91,10 +92,17 @@ export async function updateJob(
       .set({ status: status === "succeeded" ? "done" : "failed" })
       .where(and(eq(files.id, job.fileId), eq(files.status, "processing")))
       .run();
-    return job.fileId;
   });
-  await publishJobUpdates(context.events, [{ id, fileId }]);
-  if (status) await dispatchTasks(context);
+  if (status) {
+    await publishJobStatus(context.events, [id], status);
+    await dispatchTasks(context);
+  } else {
+    await context.events.publish("event", {
+      type: "job.progress",
+      id,
+      progress: changes.progress,
+    });
+  }
   return getJob(context.db, id);
 }
 

@@ -11,6 +11,7 @@ import {
   seedRule,
   seedWorker,
 } from "@/testing/seed";
+import { disconnectWorker } from "@/worker/worker.lib";
 
 function setup() {
   const context = createTestContext();
@@ -155,16 +156,15 @@ describe("requeueJobs", () => {
 });
 
 describe("dispatchTasks", () => {
-  test("publishes the updates of the assigned jobs", async () => {
+  test("publishes the status of the assigned jobs", async () => {
     const { context, worker, queue, connect, published } = setup();
     connect(worker.id);
-    const { file, job } = queue();
+    const { job } = queue();
 
     await dispatchTasks(context);
 
     expect(published).toEqual([
-      { resource: "job", change: "updated", id: job.id },
-      { resource: "file", change: "updated", id: file.id },
+      { type: "job.status", id: job.id, status: "running" },
     ]);
   });
 
@@ -222,6 +222,19 @@ describe("dispatchTasks", () => {
     await dispatchTasks(context);
 
     expect(jobRow(job.id)?.status).toBe("queued");
+  });
+
+  test("publishes the jobs requeued by a disconnection", async () => {
+    const { context, worker, assign, connect, published } = setup();
+    connect(worker.id);
+    const { job } = assign(worker.id, "running");
+
+    await disconnectWorker(context, worker.id);
+
+    expect(published).toEqual([
+      { type: "job.status", id: job.id, status: "queued" },
+      { type: "worker.disconnected", id: worker.id },
+    ]);
   });
 
   test("skips disabled workers", async () => {

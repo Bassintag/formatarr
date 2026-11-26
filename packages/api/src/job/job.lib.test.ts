@@ -90,16 +90,9 @@ describe("createJobsForFiles", () => {
     expect(jobRuleIds(job?.id)).toEqual([rule.id]);
     expect(fileStatus(f.id)).toBe("queued");
 
-    expect(received).toContainEqual({
-      resource: "job",
-      change: "created",
-      id: job?.id,
-    });
-    expect(received).toContainEqual({
-      resource: "file",
-      change: "updated",
-      id: f.id,
-    });
+    expect(received).toEqual([
+      { type: "job.status", id: job?.id, status: "queued" },
+    ]);
   });
 
   test("one job carries every unmet rule and skips satisfied and disabled ones", async () => {
