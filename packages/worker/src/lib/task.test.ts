@@ -33,12 +33,20 @@ async function advance(ms: number) {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
-async function start(connections: Connection[]) {
+type Handler = (task: Task, signal: AbortSignal) => Promise<void>;
+
+async function start(
+  connections: Connection[],
+  onTask: Handler = async () => {},
+) {
   for (const connect of connections) {
     stream.mockImplementationOnce(async () => connect());
   }
   const tasks: string[] = [];
-  void consumeTasks((task) => tasks.push(task.fileName));
+  void consumeTasks(async (task, signal) => {
+    tasks.push(task.fileName);
+    await onTask(task, signal);
+  });
   await advance(0);
   return tasks;
 }
@@ -93,5 +101,77 @@ describe("consumeTasks", () => {
       await advance(1);
       expect(stream).toHaveBeenCalledTimes(index + 2);
     }
+  });
+
+  test.each([
+    ["drops", new Error("ECONNRESET")],
+    ["closes", undefined],
+  ])("aborts the running task when the stream %s", async (_, error) => {
+    const signals: AbortSignal[] = [];
+    await start([connection(["a"], error)], async (_, signal) => {
+      signals.push(signal);
+      await new Promise((resolve) => signal.addEventListener("abort", resolve));
+    });
+
+    expect(signals.map((signal) => signal.aborted)).toEqual([true]);
+  });
+
+  test("runs one task at a time without blocking the stream", async () => {
+    const first = Promise.withResolvers<void>();
+    const open = Promise.withResolvers<void>();
+    let received = 0;
+    const tasks = await start(
+      [
+        async function* () {
+          for (const fileName of ["a", "b"]) {
+            received++;
+            yield { fileName } as Task;
+          }
+          await open.promise;
+        },
+      ],
+      async ({ fileName }) => {
+        if (fileName === "a") await first.promise;
+      },
+    );
+
+    expect(received).toBe(2);
+    expect(tasks).toEqual(["a"]);
+
+    first.resolve();
+    await advance(0);
+
+    expect(tasks).toEqual(["a", "b"]);
+  });
+
+  test("reconnects only once the running task has stopped", async () => {
+    const teardown = Promise.withResolvers<void>();
+    await start([connection(["a"])], () => teardown.promise);
+
+    await advance(10_000);
+    expect(stream).toHaveBeenCalledTimes(1);
+
+    teardown.resolve();
+    await advance(0);
+    await advance(100);
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  test("keeps running tasks after one of them throws", async () => {
+    const open = Promise.withResolvers<void>();
+    const tasks = await start(
+      [
+        async function* () {
+          yield { fileName: "a" } as Task;
+          yield { fileName: "b" } as Task;
+          await open.promise;
+        },
+      ],
+      async () => {
+        throw new Error("boom");
+      },
+    );
+
+    expect(tasks).toEqual(["a", "b"]);
   });
 });

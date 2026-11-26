@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ApiClient, JobResult, Rule, Task } from "@formatarr/contract";
 import type { TranscodeInput } from "@/lib/ffmpeg/command";
+import type { TranscodeOptions } from "@/lib/ffmpeg/run";
 import { processTask } from "@/lib/transfer";
 
 let workDir: string;
@@ -34,19 +35,33 @@ function setup({ rules = [] as Partial<Rule>[], size = 6 } = {}) {
     const content = await Bun.file(sourcePath).text();
     await Bun.write(outputPath, `${content} converted`);
   });
-  const run = () => processTask({ client, workDir }, task, transcode);
-  return { run, transcode, source, result, uploads };
+  const options: TranscodeOptions = {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  };
+  const run = () => processTask({ client, workDir }, task, transcode, options);
+  return { run, options, transcode, source, result, uploads };
 }
 
 describe("processTask", () => {
   test("uploads the transcoded download and cleans up", async () => {
-    const { run, source, uploads } = setup();
+    const { run, uploads } = setup();
 
     await run();
 
-    expect(source).toHaveBeenCalledWith({ id: 7 });
     expect(uploads).toEqual([{ id: 7, size: 16, content: "source converted" }]);
     expect(await readdir(workDir)).toEqual([]);
+  });
+
+  test("passes the abort signal to the transfers and the transcoding", async () => {
+    const { run, options, source, transcode, result } = setup();
+
+    await run();
+
+    const { signal } = options;
+    expect(source).toHaveBeenCalledWith({ id: 7 }, { signal });
+    expect(transcode).toHaveBeenCalledWith(expect.anything(), options);
+    expect(result).toHaveBeenCalledWith(expect.anything(), { signal });
   });
 
   test.each([
