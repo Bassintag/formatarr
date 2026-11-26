@@ -19,7 +19,7 @@ const { consumeTasks } = await import("@/lib/task");
 
 function connection(paths: string[] = [], error?: Error): Connection {
   return async function* () {
-    for (const sourcePath of paths) yield { sourcePath } as Task;
+    for (const fileName of paths) yield { fileName } as Task;
     if (error) throw error;
   };
 }
@@ -38,7 +38,7 @@ async function start(connections: Connection[]) {
     stream.mockImplementationOnce(async () => connect());
   }
   const tasks: string[] = [];
-  void consumeTasks((task) => tasks.push(task.sourcePath));
+  void consumeTasks((task) => tasks.push(task.fileName));
   await advance(0);
   return tasks;
 }

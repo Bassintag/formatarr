@@ -50,14 +50,9 @@ describe("workers CRUD", () => {
     const { call } = setup();
     const { id } = await call.workers.create({ name: "w1" });
 
-    const updated = await call.workers.update({
-      id,
-      enabled: false,
-      pathMappings: [{ from: "/a", to: "/b" }],
-    });
+    const updated = await call.workers.update({ id, enabled: false });
     expect(updated.name).toBe("w1");
     expect(updated.enabled).toBe(false);
-    expect(updated.pathMappings).toEqual([{ from: "/a", to: "/b" }]);
   });
 
   test("remove deletes the worker", async () => {

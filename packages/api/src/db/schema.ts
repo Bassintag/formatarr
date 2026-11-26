@@ -10,7 +10,6 @@ import {
   type RuleId,
   RuleTypeSchema,
   type RuleValue,
-  type Worker,
   type WorkerId,
 } from "@formatarr/contract";
 import { sql } from "drizzle-orm";
@@ -105,10 +104,6 @@ export const workers = sqliteTable("workers", {
   name: text().notNull(),
   tokenHash: text("token_hash").notNull(),
   enabled: integer({ mode: "boolean" }).notNull().default(true),
-  pathMappings: text("path_mappings", { mode: "json" })
-    .$type<Worker["pathMappings"]>()
-    .notNull()
-    .default(sql`'[]'`),
   lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }),
 });
 

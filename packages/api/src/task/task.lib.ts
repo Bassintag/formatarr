@@ -1,6 +1,5 @@
-import { join, parse } from "node:path";
+import { basename } from "node:path";
 import type {
-  Job,
   JobId,
   JobStatus,
   JobUpdate,
@@ -15,6 +14,10 @@ import { MAX_RUNNING_JOBS } from "@/worker/worker.options";
 
 type TaskContext = Pick<Context, "db" | "events" | "workers">;
 
+type JobChanges = Omit<JobUpdate, "status"> & {
+  status?: Extract<JobStatus, "succeeded" | "failed">;
+};
+
 export async function publishJobStatus(
   events: Context["events"],
   ids: JobId[],
@@ -23,14 +26,6 @@ export async function publishJobStatus(
   for (const id of ids) {
     await events.publish("event", { type: "job.status", id, status });
   }
-}
-
-// TODO: replace once files are transferred over the network
-function temporaryOutputPath(sourcePath: string, rules: Job["rules"]) {
-  const { dir, name, ext } = parse(sourcePath);
-  const container = rules.find((rule) => rule.type === "container");
-  const extension = container ? `.${container.value}` : ext;
-  return join(dir, `${name}.formatarr${extension}`);
 }
 
 export function claimTask(db: Context["db"], workerId: WorkerId) {
@@ -46,7 +41,9 @@ export function claimTask(db: Context["db"], workerId: WorkerId) {
     const next = tx.query.jobs
       .findFirst({
         columns: { id: true, fileId: true },
-        with: { file: { columns: { path: true, mediaInfo: true } } },
+        with: {
+          file: { columns: { path: true, size: true, mediaInfo: true } },
+        },
         where: {
           status: "queued",
           file: {
@@ -59,7 +56,7 @@ export function claimTask(db: Context["db"], workerId: WorkerId) {
       })
       .sync();
     if (!next?.file?.mediaInfo) return;
-    const { path, mediaInfo } = next.file;
+    const { path, size, mediaInfo } = next.file;
     tx.update(jobs)
       .set({ status: "running", workerId, startedAt: new Date() })
       .where(eq(jobs.id, next.id))
@@ -68,11 +65,10 @@ export function claimTask(db: Context["db"], workerId: WorkerId) {
       .set({ status: "processing" })
       .where(eq(files.id, next.fileId))
       .run();
-    const job = getJob(tx, next.id);
     return {
-      job,
-      sourcePath: path,
-      outputPath: temporaryOutputPath(path, job.rules),
+      job: getJob(tx, next.id),
+      fileName: basename(path),
+      size,
       mediaInfo,
     };
   });
@@ -90,7 +86,7 @@ export async function dispatchTasks(context: TaskContext) {
 export async function updateJob(
   context: TaskContext,
   workerId: WorkerId,
-  { id, ...changes }: JobUpdate,
+  { id, ...changes }: JobChanges,
 ) {
   const { status } = changes;
   context.db.transaction((tx) => {

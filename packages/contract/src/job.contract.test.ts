@@ -26,13 +26,13 @@ test("JobUpdateSchema rejects a progress outside 0-100", () => {
   );
 });
 
-test("JobUpdateSchema only accepts final statuses", () => {
+test("JobUpdateSchema only accepts a failure", () => {
   const update = { id: 1, progress: 100 };
   expect(
-    JobUpdateSchema.safeParse({ ...update, status: "succeeded" }).success,
+    JobUpdateSchema.safeParse({ ...update, status: "failed" }).success,
   ).toBe(true);
   expect(
-    JobUpdateSchema.safeParse({ ...update, status: "queued" }).success,
+    JobUpdateSchema.safeParse({ ...update, status: "succeeded" }).success,
   ).toBe(false);
 });
 

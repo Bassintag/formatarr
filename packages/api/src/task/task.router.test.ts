@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { basename } from "node:path";
 import type { Task } from "@formatarr/contract";
 import { createJobsForFiles } from "@/job/job.lib";
 import { createTestCaller } from "@/testing/harness";
@@ -85,7 +86,7 @@ describe("tasks.stream", () => {
 
     await createJobsForFiles(context, [file.id]);
 
-    expect((await received(next)).sourcePath).toBe(file.path);
+    expect((await received(next)).fileName).toBe(basename(file.path));
     await stream.return?.();
   });
 
@@ -101,7 +102,7 @@ describe("tasks.stream", () => {
     await asWorker.jobs.update({
       id: first.id,
       progress: 100,
-      status: "succeeded",
+      status: "failed",
     });
 
     expect((await received(next)).job.id).toBe(second.id);

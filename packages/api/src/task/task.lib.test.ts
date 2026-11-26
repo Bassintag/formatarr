@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { basename } from "node:path";
 import type { AppEvent, WorkerId } from "@formatarr/contract";
 import { eq } from "drizzle-orm";
-import { files, jobRules, jobs } from "@/db/schema";
+import { files, jobs } from "@/db/schema";
 import { claimTask, dispatchTasks, requeueJobs } from "@/task/task.lib";
 import { createTestContext } from "@/testing/harness";
 import {
@@ -87,7 +88,7 @@ describe("claimTask", () => {
     const task = claimTask(context.db, worker.id);
 
     expect(task).toMatchObject({
-      sourcePath: file.path,
+      fileName: basename(file.path),
       job: {
         id: first.id,
         status: "running",
@@ -99,25 +100,18 @@ describe("claimTask", () => {
     expect(fileRow(file.id)?.status).toBe("processing");
   });
 
-  test("provides the media info and an output path next to the source", () => {
-    const { context, db, library, worker, queue } = setup();
-    const rule = seedRule(db, library.id, { type: "container", value: "mp4" });
-    const { job } = queue({ path: "/media/Movie (2020).mkv" });
-    db.insert(jobRules).values({ jobId: job.id, ruleId: rule.id }).run();
+  test("describes the source file without exposing its path", () => {
+    const { context, worker, queue } = setup();
+    queue({ path: "/media/Movie (2020).mkv", size: 42 });
 
-    expect(claimTask(context.db, worker.id)).toMatchObject({
-      outputPath: "/media/Movie (2020).formatarr.mp4",
+    const task = claimTask(context.db, worker.id);
+
+    expect(task).toEqual({
+      job: expect.anything(),
+      fileName: "Movie (2020).mkv",
+      size: 42,
       mediaInfo: sampleMediaInfo,
     });
-  });
-
-  test("keeps the source extension without a container rule", () => {
-    const { context, worker, queue } = setup();
-    queue({ path: "/media/show.avi" });
-
-    expect(claimTask(context.db, worker.id)?.outputPath).toBe(
-      "/media/show.formatarr.avi",
-    );
   });
 
   test("leaves queued the jobs of files without media info", () => {

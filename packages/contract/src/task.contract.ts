@@ -6,8 +6,8 @@ import { orpc, workerMeta } from "./orpc";
 
 export const TaskSchema = z.object({
   job: JobSchema,
-  sourcePath: z.string(),
-  outputPath: z.string(),
+  fileName: z.string(),
+  size: z.number(),
   mediaInfo: MediaInfoSchema,
 });
 export type Task = z.infer<typeof TaskSchema>;

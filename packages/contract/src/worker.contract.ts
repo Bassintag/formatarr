@@ -12,18 +12,11 @@ import { orpc } from "./orpc";
 export const WorkerStatusSchema = z.enum(["online", "offline"]);
 export type WorkerStatus = z.infer<typeof WorkerStatusSchema>;
 
-export const PathMappingSchema = z.object({
-  from: z.string(),
-  to: z.string(),
-});
-export type PathMapping = z.infer<typeof PathMappingSchema>;
-
 export const WorkerSchema = z.object({
   id: WorkerIdSchema,
   name: z.string(),
   status: WorkerStatusSchema,
   enabled: z.boolean(),
-  pathMappings: z.array(PathMappingSchema),
   runningJobs: z.array(z.object({ id: JobIdSchema })),
   lastSeenAt: z.date().nullable(),
 });
@@ -45,10 +38,7 @@ export const WorkerCreateSchema = z.object({
 export type WorkerCreate = z.infer<typeof WorkerCreateSchema>;
 
 export const WorkerUpdateSchema = UpdateSchema(
-  WorkerCreateSchema.extend({
-    enabled: z.boolean(),
-    pathMappings: z.array(PathMappingSchema),
-  }),
+  WorkerCreateSchema.extend({ enabled: z.boolean() }),
   WorkerIdSchema,
 );
 export type WorkerUpdate = z.infer<typeof WorkerUpdateSchema>;

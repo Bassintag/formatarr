@@ -89,12 +89,17 @@ function mapArgs(plan: Plan) {
   return streams.flatMap((stream) => ["-map", stream]);
 }
 
+export type TranscodeInput = Pick<Task, "job" | "mediaInfo"> & {
+  sourcePath: string;
+  outputPath: string;
+};
+
 export function buildFfmpegArgs({
   job,
   sourcePath,
   outputPath,
   mediaInfo,
-}: Task) {
+}: TranscodeInput) {
   const plan = job.rules
     .filter((rule) => rule.enabled)
     .reduce(applyRule, createPlan(mediaInfo));

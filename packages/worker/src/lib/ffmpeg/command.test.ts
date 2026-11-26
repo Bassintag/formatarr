@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { MediaInfo, RuleValue, Task } from "@formatarr/contract";
-import { buildFfmpegArgs } from "@/lib/ffmpeg/command";
+import type { MediaInfo, RuleValue } from "@formatarr/contract";
+import { buildFfmpegArgs, type TranscodeInput } from "@/lib/ffmpeg/command";
 
 const mediaInfo: MediaInfo = {
   container: "mkv",
@@ -17,7 +17,7 @@ function build(rules: RuleValue[], info: Partial<MediaInfo> = {}) {
     sourcePath: "/media/in.mkv",
     outputPath: "/media/out.mkv",
     mediaInfo: { ...mediaInfo, ...info },
-  } as Task);
+  } as TranscodeInput);
 }
 
 function option(args: string[], name: string) {
@@ -52,7 +52,7 @@ describe("buildFfmpegArgs", () => {
       sourcePath: "/media/in.mkv",
       outputPath: "/media/out.mkv",
       mediaInfo,
-    } as Task);
+    } as TranscodeInput);
 
     expect(args).toEqual(build([]));
   });

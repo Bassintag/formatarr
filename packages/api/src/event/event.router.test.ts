@@ -46,7 +46,7 @@ describe("events.stream", () => {
     await asWorker.jobs.update({
       id: job.id,
       progress: 100,
-      status: "succeeded",
+      status: "failed",
     });
     await receive(2);
     await tasks.return?.();
@@ -57,7 +57,7 @@ describe("events.stream", () => {
       { type: "worker.connected", id: worker.id },
       { type: "job.status", id: job.id, status: "running" },
       { type: "job.progress", id: job.id, progress: 40 },
-      { type: "job.status", id: job.id, status: "succeeded" },
+      { type: "job.status", id: job.id, status: "failed" },
       { type: "worker.disconnected", id: worker.id },
     ]);
   });
