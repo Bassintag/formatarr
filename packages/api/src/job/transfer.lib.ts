@@ -7,6 +7,7 @@ import { ORPCError } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files } from "@/db/schema";
+import { rescanIntegrations } from "@/integration/arr.lib";
 import { getJob } from "@/job/job.lib";
 import {
   placeResult,
@@ -146,5 +147,8 @@ export async function receiveResult(
     await rm(partial, { force: true });
   }
   await announceJob(context, id, "succeeded");
+  rescanIntegrations(context, id, file).catch((err) =>
+    context.logger.error({ err, jobId: id }, "rescan failed"),
+  );
   return getJob(context.db, id);
 }

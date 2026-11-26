@@ -24,6 +24,7 @@ import { createTestCaller } from "@/testing/harness";
 import {
   sampleMediaInfo,
   seedFile,
+  seedIntegration,
   seedJob,
   seedLibrary,
   seedWorker,
@@ -182,6 +183,24 @@ describe("jobs.result", () => {
     expect(await Bun.file(path).bytes()).toEqual(output);
     expect((await stat(path)).mode & 0o777).toBe(0o640);
     expect(await readdir(root)).toEqual(["movie.mkv"]);
+  });
+
+  test("succeeds even when the rescan fails", async () => {
+    const { call, db, library, owner, job } = await setup();
+    seedIntegration(db, [library.id]);
+    const failed = Promise.withResolvers<void>();
+    spyOn(globalThis, "fetch").mockImplementation((async () => {
+      failed.resolve();
+      throw new Error("unreachable");
+    }) as unknown as typeof fetch);
+
+    const updated = await owner.call.jobs.result(upload(job.id));
+    await failed.promise;
+    await new Promise(setImmediate);
+
+    expect(updated.status).toBe("succeeded");
+    const logs = await call.jobs.logs({ id: job.id });
+    expect(JSON.stringify(logs)).toContain("Rescan failed on arr: unreachable");
   });
 
   test("renames the file when the container changes", async () => {

@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { integrations, libraryIntegrations } from "@/db/schema";
 import { createTestCaller } from "@/testing/harness";
-import { seedLibrary, unknownId } from "@/testing/seed";
+import { seedIntegration, seedLibrary, unknownId } from "@/testing/seed";
 
 const API_KEY = "super-secret-api-key-1234";
 
@@ -124,5 +124,55 @@ describe("integrations CRUD", () => {
     expect(call.integrations.remove({ id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+});
+
+describe("integrations.test", () => {
+  test("returns the version using the stored api key", async () => {
+    const { call, db } = createTestCaller();
+    const { id } = seedIntegration(db, [], {
+      apiKey: API_KEY,
+      enabled: false,
+    });
+    const fetched = spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ appName: "Radarr", version: "5.1.0" }),
+    );
+
+    expect(await call.integrations.test({ id })).toEqual({ version: "5.1.0" });
+
+    expect(fetched).toHaveBeenCalledWith(
+      "http://arr.test/api/v3/system/status",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({ "x-api-key": API_KEY }),
+      }),
+    );
+  });
+
+  test.each([
+    [
+      "is unreachable",
+      async () => {
+        throw new Error("unreachable");
+      },
+    ],
+    ["rejects the api key", async () => new Response(null, { status: 401 })],
+    ["is not an arr app", async () => new Response("<html></html>")],
+  ])("fails when the server %s", async (_, respond) => {
+    const { call, db } = createTestCaller();
+    const { id } = seedIntegration(db);
+    spyOn(globalThis, "fetch").mockImplementation(respond as never);
+
+    await expect(call.integrations.test({ id })).rejects.toMatchObject({
+      code: "BAD_GATEWAY",
+    });
+  });
+
+  test("unknown ids are not found", async () => {
+    const { call } = createTestCaller();
+
+    await expect(
+      call.integrations.test({ id: unknownId }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
