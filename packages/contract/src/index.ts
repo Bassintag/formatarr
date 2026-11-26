@@ -12,4 +12,5 @@ export * from "./orpc";
 export * from "./rule.contract";
 export * from "./scan.contract";
 export * from "./settings.contract";
+export * from "./task.contract";
 export * from "./worker.contract";

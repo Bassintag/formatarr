@@ -1,10 +1,13 @@
+import { userAuth } from "@/auth/auth.middleware";
 import { orpc } from "@/lib/orpc";
 
-const get = orpc.settings.get.handler(({ context }) => {
+const userSettings = orpc.settings.use(userAuth);
+
+const get = userSettings.get.handler(({ context }) => {
   return context.settings.read();
 });
 
-const update = orpc.settings.update.handler(({ context, input }) => {
+const update = userSettings.update.handler(({ context, input }) => {
   return context.settings.update(input);
 });
 

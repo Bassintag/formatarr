@@ -1,18 +1,15 @@
 import type { Job } from "@formatarr/contract";
 import { ORPCError } from "@orpc/server";
 import { count, eq, type SQL } from "drizzle-orm";
+import { userAuth, workerAuth } from "@/auth/auth.middleware";
 import { jobs } from "@/db/schema";
+import { getJob } from "@/job/job.lib";
 import { jobOptions } from "@/job/job.options";
-import {
-  buildWhere,
-  firstOrThrow,
-  orThrow,
-  paginationOption,
-  toPage,
-} from "@/lib/db";
+import { buildWhere, firstOrThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
+import { dispatchTasks, updateJob } from "@/task/task.lib";
 
-const list = orpc.jobs.list.handler(({ context, input }) => {
+const list = orpc.jobs.use(userAuth).list.handler(({ context, input }) => {
   function where(table: typeof jobs) {
     const conditions: SQL[] = [];
     if (input.status) {
@@ -41,41 +38,38 @@ const list = orpc.jobs.list.handler(({ context, input }) => {
   return { ...page, items: page.items as Job[] };
 });
 
-const create = orpc.jobs.create.handler(() => {
+const create = orpc.jobs.use(userAuth).create.handler(() => {
   // TODO: implement
   throw new ORPCError("NOT_IMPLEMENTED");
 });
 
-const get = orpc.jobs.get.handler(({ context, input }) => {
-  return orThrow(
-    context.db.query.jobs
-      .findFirst({
-        ...jobOptions,
-        where: { id: input.id },
-      })
-      .sync(),
-  ) as Job;
+const get = orpc.jobs.use(userAuth).get.handler(({ context, input }) => {
+  return getJob(context.db, input.id);
 });
 
-const update = orpc.jobs.update.handler(() => {
-  // TODO: implement
-  throw new ORPCError("NOT_IMPLEMENTED");
-});
-
-const remove = orpc.jobs.remove.handler(async ({ context, input }) => {
-  firstOrThrow(
-    context.db
-      .delete(jobs)
-      .where(eq(jobs.id, input.id))
-      .returning({ id: jobs.id })
-      .all(),
-  );
-  await context.events.publish("event", {
-    resource: "job",
-    change: "deleted",
-    id: input.id,
+const update = orpc.jobs
+  .use(workerAuth)
+  .update.handler(({ context, input }) => {
+    return updateJob(context, context.worker.id, input);
   });
-});
+
+const remove = orpc.jobs
+  .use(userAuth)
+  .remove.handler(async ({ context, input }) => {
+    firstOrThrow(
+      context.db
+        .delete(jobs)
+        .where(eq(jobs.id, input.id))
+        .returning({ id: jobs.id })
+        .all(),
+    );
+    await context.events.publish("event", {
+      resource: "job",
+      change: "deleted",
+      id: input.id,
+    });
+    await dispatchTasks(context);
+  });
 
 export const jobsRouter = orpc.jobs.router({
   list,

@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { getAuthMeta } from "@formatarr/contract";
+import type { WorkerId } from "@formatarr/contract";
 import { ORPCError, os } from "@orpc/server";
 import { eq } from "drizzle-orm";
 import { verifyToken } from "@/auth/token";
@@ -8,7 +8,9 @@ import { workers } from "@/db/schema";
 import { hashWorkerToken } from "@/worker/worker.lib";
 
 type AuthUser = { username: string };
-type AuthWorker = { id: number };
+export type AuthWorker = { id: WorkerId };
+
+const base = os.$context<RequestContext>();
 
 function safeEqual(a: string, b: string) {
   const left = Buffer.from(a);
@@ -16,40 +18,42 @@ function safeEqual(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-export const authMiddleware = os
-  .$context<RequestContext>()
-  .middleware(async ({ context, procedure, next }) => {
-    const kind = getAuthMeta(procedure)?.kind;
-    if (!kind) return next();
+function bearerToken(headers: Headers) {
+  return headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
+}
 
-    const headers = context.request.headers;
-    const bearer = headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
+export const userAuth = base.middleware(async ({ context, next }) => {
+  const { headers } = context.request;
+  const auth = (await context.settings.read()).auth;
 
-    if (kind === "worker") {
-      if (bearer) {
-        const worker = context.db
-          .select({ id: workers.id, enabled: workers.enabled })
-          .from(workers)
-          .where(eq(workers.tokenHash, hashWorkerToken(bearer)))
-          .get();
-        if (worker?.enabled) {
-          return next({ context: { worker: { id: worker.id } as AuthWorker } });
-        }
-      }
-      throw new ORPCError("UNAUTHORIZED");
+  const apiKey = headers.get("x-api-key");
+  if (apiKey && safeEqual(apiKey, auth.apiKey)) {
+    const user: AuthUser = { username: "api-key" };
+    return next({ context: { user } });
+  }
+
+  const bearer = bearerToken(headers);
+  if (bearer) {
+    const user = await verifyToken("access", bearer, auth.jwtSecret);
+    if (user) return next({ context: { user } });
+  }
+
+  throw new ORPCError("UNAUTHORIZED");
+});
+
+export const workerAuth = base.middleware(({ context, next }) => {
+  const bearer = bearerToken(context.request.headers);
+  if (bearer) {
+    const row = context.db
+      .select({ id: workers.id, enabled: workers.enabled })
+      .from(workers)
+      .where(eq(workers.tokenHash, hashWorkerToken(bearer)))
+      .get();
+    if (row?.enabled) {
+      const worker: AuthWorker = { id: row.id };
+      return next({ context: { worker } });
     }
+  }
 
-    const auth = (await context.settings.read()).auth;
-
-    const apiKey = headers.get("x-api-key");
-    if (apiKey && safeEqual(apiKey, auth.apiKey)) {
-      return next({ context: { user: { username: "api-key" } as AuthUser } });
-    }
-
-    if (bearer) {
-      const user = await verifyToken("access", bearer, auth.jwtSecret);
-      if (user) return next({ context: { user: user as AuthUser } });
-    }
-
-    throw new ORPCError("UNAUTHORIZED");
-  });
+  throw new ORPCError("UNAUTHORIZED");
+});

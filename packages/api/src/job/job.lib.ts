@@ -1,5 +1,6 @@
 import type {
   FileId,
+  Job,
   JobId,
   LibraryId,
   MediaInfo,
@@ -9,9 +10,18 @@ import type {
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files, jobRules, jobs, rules as rulesTable } from "@/db/schema";
+import { jobOptions } from "@/job/job.options";
+import { orThrow, type Tx } from "@/lib/db";
 import { findUnmetRules } from "@/rules/rule.lib";
+import { dispatchTasks } from "@/task/task.lib";
 
 export const JOB_CHUNK_SIZE = 500;
+
+export function getJob(db: Context["db"] | Tx, id: JobId) {
+  return orThrow(
+    db.query.jobs.findFirst({ ...jobOptions, where: { id } }).sync(),
+  ) as Job;
+}
 
 export function evaluableFiles(table: typeof files, libraryId: LibraryId) {
   return and(
@@ -23,7 +33,7 @@ export function evaluableFiles(table: typeof files, libraryId: LibraryId) {
 }
 
 export async function createJobsForFiles(
-  context: Pick<Context, "db" | "events" | "logger">,
+  context: Pick<Context, "db" | "events" | "logger" | "workers">,
   ids: FileId[],
 ) {
   const { db, events } = context;
@@ -103,12 +113,13 @@ export async function createJobsForFiles(
   for (const id of updatedFiles) {
     await events.publish("event", { resource: "file", change: "updated", id });
   }
+  if (createdJobs.length > 0) await dispatchTasks(context);
 
   return createdJobs.length;
 }
 
 export async function reevaluateLibrary(
-  context: Pick<Context, "db" | "events" | "logger">,
+  context: Pick<Context, "db" | "events" | "logger" | "workers">,
   libraryId: LibraryId,
 ) {
   const { db, events } = context;

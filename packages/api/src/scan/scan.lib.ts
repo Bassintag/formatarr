@@ -7,6 +7,7 @@ import { createJobsForFiles } from "@/job/job.lib";
 import { orThrow } from "@/lib/db";
 import { assertDirectory } from "@/library/library.lib";
 import { probeFiles } from "@/probe/probe.lib";
+import { dispatchTasks } from "@/task/task.lib";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mkv",
@@ -25,7 +26,10 @@ const MEDIA_EXTENSIONS = new Set([
 
 const DELETE_CHUNK_SIZE = 500;
 
-type ScanContext = Pick<Context, "db" | "events" | "logger" | "env" | "probe">;
+type ScanContext = Pick<
+  Context,
+  "db" | "events" | "logger" | "env" | "probe" | "workers"
+>;
 
 export type ScanResult = { created: number; updated: number; deleted: number };
 
@@ -110,6 +114,7 @@ export async function scanLibrary(
   for (const { change, id } of changes) {
     await events.publish("event", { resource: "file", change, id });
   }
+  if (deleted.length > 0) await dispatchTasks(context);
 
   await probeFiles(context, [...created, ...updated]);
   await createJobsForFiles(context, [...created, ...updated]);

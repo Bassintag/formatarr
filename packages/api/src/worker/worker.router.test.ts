@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { jobs, workers } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
-import { seedFile, seedLibrary, unknownId } from "@/testing/seed";
+import { seedFile, seedJob, seedLibrary, unknownId } from "@/testing/seed";
 import { hashWorkerToken } from "@/worker/worker.lib";
 
 const capabilities = { ffmpegVersion: "7.0", hwaccels: ["vaapi"] };
@@ -99,6 +99,31 @@ describe("workers CRUD", () => {
 });
 
 describe("running jobs", () => {
+  test("removing a worker requeues its running jobs", async () => {
+    const { call, db } = setup();
+    const worker = await call.workers.create({ name: "w1", capabilities });
+    const library = seedLibrary(db);
+    const file = seedFile(db, library.id, { status: "processing" });
+    const job = seedJob(db, file.id, [], {
+      workerId: worker.id,
+      status: "running",
+      progress: 50,
+      startedAt: new Date(),
+    });
+
+    await call.workers.remove({ id: worker.id });
+
+    expect(await call.jobs.get({ id: job.id })).toMatchObject({
+      status: "queued",
+      workerId: null,
+      progress: 0,
+      startedAt: null,
+    });
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      status: "queued",
+    });
+  });
+
   test("only running jobs are exposed", async () => {
     const { call, db } = setup();
     const worker = await call.workers.create({ name: "w1", capabilities });
@@ -131,30 +156,25 @@ describe("worker token", () => {
     const { token } = await call.workers.regenerateToken({ id: created.id });
 
     expect(token).not.toBe(created.token);
-    expect(
-      asWorker(created.token).workers.jobs({ id: created.id }),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    expect(
-      asWorker(token).workers.jobs({ id: created.id }),
-    ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
+    expect(asWorker(created.token).tasks.stream()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(asWorker(token).tasks.stream()).resolves.toBeDefined();
   });
 
   test("valid token passes the worker middleware", async () => {
     const { call, asWorker } = setup();
     const created = await call.workers.create({ name: "w1", capabilities });
 
-    expect(
-      asWorker(created.token).workers.jobs({ id: created.id }),
-    ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
+    expect(asWorker(created.token).tasks.stream()).resolves.toBeDefined();
   });
 
   test("unknown token is rejected", async () => {
-    const { call, asWorker } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
+    const { asWorker } = setup();
 
-    expect(
-      asWorker("fmw_nope").workers.jobs({ id: created.id }),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(asWorker("fmw_nope").tasks.stream()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
   });
 
   test("disabled worker is rejected", async () => {
@@ -162,16 +182,15 @@ describe("worker token", () => {
     const created = await call.workers.create({ name: "w1", capabilities });
     await call.workers.update({ id: created.id, enabled: false });
 
-    expect(
-      asWorker(created.token).workers.jobs({ id: created.id }),
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    expect(asWorker(created.token).tasks.stream()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
   });
 
   test("user credentials are rejected on worker routes", async () => {
     const { call } = setup();
-    const created = await call.workers.create({ name: "w1", capabilities });
 
-    expect(call.workers.jobs({ id: created.id })).rejects.toMatchObject({
+    expect(call.tasks.stream()).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     });
   });
