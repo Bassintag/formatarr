@@ -1,4 +1,3 @@
-import { eventIterator } from "@orpc/contract";
 import { z } from "zod";
 import {
   IdParamsSchema,
@@ -8,10 +7,9 @@ import {
   VoidSchema,
 } from "./common.contract";
 import { JobIdSchema, WorkerIdSchema } from "./ids";
-import { JobOfferSchema } from "./job.contract";
-import { orpc, workerMeta } from "./orpc";
+import { orpc } from "./orpc";
 
-export const WorkerStatusSchema = z.enum(["online", "busy", "offline"]);
+export const WorkerStatusSchema = z.enum(["online", "offline"]);
 export type WorkerStatus = z.infer<typeof WorkerStatusSchema>;
 
 export const WorkerCapabilitiesSchema = z.object({
@@ -90,9 +88,4 @@ export const workersContract = orpc
       .route({ method: "POST", path: "/{id}/token" })
       .input(IdParamsSchema(WorkerIdSchema))
       .output(WorkerTokenSchema),
-    jobs: orpc
-      .meta(workerMeta)
-      .route({ method: "GET", path: "/{id}/jobs" })
-      .input(IdParamsSchema(WorkerIdSchema))
-      .output(eventIterator(JobOfferSchema)),
   });

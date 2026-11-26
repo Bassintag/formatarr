@@ -26,6 +26,20 @@ test("JobUpdateSchema rejects a progress outside 0-100", () => {
   );
 });
 
+test("JobUpdateSchema only accepts final statuses", () => {
+  const update = { id: 1, progress: 100 };
+  expect(
+    JobUpdateSchema.safeParse({ ...update, status: "succeeded" }).success,
+  ).toBe(true);
+  expect(
+    JobUpdateSchema.safeParse({ ...update, status: "queued" }).success,
+  ).toBe(false);
+});
+
+test("JobUpdateSchema requires a progress", () => {
+  expect(JobUpdateSchema.safeParse({ id: 1 }).success).toBe(false);
+});
+
 test("JobSchema rejects an unknown status", () => {
   expect(JobSchema.safeParse({ ...job, status: "paused" }).success).toBe(false);
 });

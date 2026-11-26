@@ -1,7 +1,10 @@
+import { userAuth } from "@/auth/auth.middleware";
 import { orThrow } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
-const create = orpc.scans.create.handler(({ context, input }) => {
+const userScans = orpc.scans.use(userAuth);
+
+const create = userScans.create.handler(({ context, input }) => {
   orThrow(
     context.db.query.libraries
       .findFirst({

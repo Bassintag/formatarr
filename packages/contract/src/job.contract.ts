@@ -3,11 +3,10 @@ import {
   IdParamsSchema,
   PageSchema,
   PaginationSchema,
-  UpdateSchema,
   VoidSchema,
 } from "./common.contract";
 import { FileIdSchema, JobIdSchema, WorkerIdSchema } from "./ids";
-import { orpc } from "./orpc";
+import { orpc, workerMeta } from "./orpc";
 import { RuleSchema } from "./rule.contract";
 
 export const JobStatusSchema = z.enum([
@@ -33,13 +32,6 @@ export const JobSchema = z.object({
 });
 export type Job = z.infer<typeof JobSchema>;
 
-export const JobOfferSchema = z.object({
-  job: JobSchema,
-  sourcePath: z.string(),
-  rules: z.array(RuleSchema),
-});
-export type JobOffer = z.infer<typeof JobOfferSchema>;
-
 export const ListJobsInputSchema = PaginationSchema.extend({
   status: JobStatusSchema.optional(),
   workerId: WorkerIdSchema.optional(),
@@ -50,15 +42,12 @@ export type ListJobsInput = z.infer<typeof ListJobsInputSchema>;
 export const JobCreateSchema = z.object({ fileId: FileIdSchema });
 export type JobCreate = z.infer<typeof JobCreateSchema>;
 
-export const JobUpdateSchema = UpdateSchema(
-  z.object({
-    status: JobStatusSchema,
-    progress: z.number().min(0).max(100),
-    error: z.string(),
-    workerId: WorkerIdSchema,
-  }),
-  JobIdSchema,
-);
+export const JobUpdateSchema = z.object({
+  id: JobIdSchema,
+  progress: z.number().min(0).max(100),
+  status: JobStatusSchema.extract(["succeeded", "failed"]).optional(),
+  error: z.string().optional(),
+});
 export type JobUpdate = z.infer<typeof JobUpdateSchema>;
 
 export const jobsContract = orpc
@@ -77,6 +66,7 @@ export const jobsContract = orpc
       .input(IdParamsSchema(JobIdSchema))
       .output(JobSchema),
     update: orpc
+      .meta(workerMeta)
       .route({ method: "PATCH", path: "/{id}" })
       .input(JobUpdateSchema)
       .output(JobSchema),

@@ -1,5 +1,6 @@
 import type { Library } from "@formatarr/contract";
 import { count, eq } from "drizzle-orm";
+import { userAuth } from "@/auth/auth.middleware";
 import { libraries } from "@/db/schema";
 import { reevaluateLibrary } from "@/job/job.lib";
 import {
@@ -18,8 +19,11 @@ import {
   setRules,
 } from "@/library/library.lib";
 import { libraryOptions } from "@/library/library.options";
+import { dispatchTasks } from "@/task/task.lib";
 
-const list = orpc.libraries.list.handler(({ context, input }) => {
+const userLibraries = orpc.libraries.use(userAuth);
+
+const list = userLibraries.list.handler(({ context, input }) => {
   const page = toPage(
     context.db.query.libraries
       .findMany({
@@ -33,7 +37,7 @@ const list = orpc.libraries.list.handler(({ context, input }) => {
   return { ...page, items: page.items as Library[] };
 });
 
-const create = orpc.libraries.create.handler(async ({ context, input }) => {
+const create = userLibraries.create.handler(async ({ context, input }) => {
   await assertDirectory(input.path);
   assertCron(input.scanCron);
   const { integrations, rules, ...values } = input;
@@ -56,7 +60,7 @@ const create = orpc.libraries.create.handler(async ({ context, input }) => {
   return created;
 });
 
-const get = orpc.libraries.get.handler(({ context, input }) => {
+const get = userLibraries.get.handler(({ context, input }) => {
   return orThrow(
     context.db.query.libraries
       .findFirst({
@@ -67,7 +71,7 @@ const get = orpc.libraries.get.handler(({ context, input }) => {
   ) as Library;
 });
 
-const update = orpc.libraries.update.handler(async ({ context, input }) => {
+const update = userLibraries.update.handler(async ({ context, input }) => {
   const { id, integrations, rules, ...changes } = input;
   if (changes.path !== undefined) await assertDirectory(changes.path);
   assertCron(changes.scanCron);
@@ -90,6 +94,7 @@ const update = orpc.libraries.update.handler(async ({ context, input }) => {
   if (rules !== undefined) {
     await reevaluateLibrary(context, id);
   }
+  if (changes.enabled) await dispatchTasks(context);
   const updated = orThrow(
     context.db.query.libraries
       .findFirst({ ...libraryOptions, where: { id } })
@@ -99,7 +104,7 @@ const update = orpc.libraries.update.handler(async ({ context, input }) => {
   return updated;
 });
 
-const createPreview = orpc.libraries.createPreview.handler(
+const createPreview = userLibraries.createPreview.handler(
   ({ context, input }) => {
     orThrow(
       context.db.query.libraries
@@ -110,7 +115,7 @@ const createPreview = orpc.libraries.createPreview.handler(
   },
 );
 
-const remove = orpc.libraries.remove.handler(({ context, input }) => {
+const remove = userLibraries.remove.handler(async ({ context, input }) => {
   const removed = firstOrThrow(
     context.db
       .delete(libraries)
@@ -119,6 +124,7 @@ const remove = orpc.libraries.remove.handler(({ context, input }) => {
       .all(),
   );
   context.schedulers.scan.remove(removed.id);
+  await dispatchTasks(context);
 });
 
 export const librariesRouter = orpc.libraries.router({

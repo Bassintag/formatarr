@@ -1,4 +1,5 @@
 import { count, eq } from "drizzle-orm";
+import { userAuth } from "@/auth/auth.middleware";
 import { integrations } from "@/db/schema";
 import { integrationOptions } from "@/integration/integration.options";
 import {
@@ -10,7 +11,9 @@ import {
 } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 
-const list = orpc.integrations.list.handler(({ context, input }) => {
+const userIntegrations = orpc.integrations.use(userAuth);
+
+const list = userIntegrations.list.handler(({ context, input }) => {
   return toPage(
     context.db.query.integrations
       .findMany({
@@ -23,13 +26,13 @@ const list = orpc.integrations.list.handler(({ context, input }) => {
   );
 });
 
-const create = orpc.integrations.create.handler(({ context, input }) => {
+const create = userIntegrations.create.handler(({ context, input }) => {
   return firstOrThrow(
     context.db.insert(integrations).values(input).returning().all(),
   );
 });
 
-const get = orpc.integrations.get.handler(({ context, input }) => {
+const get = userIntegrations.get.handler(({ context, input }) => {
   return orThrow(
     context.db.query.integrations
       .findFirst({
@@ -40,7 +43,7 @@ const get = orpc.integrations.get.handler(({ context, input }) => {
   );
 });
 
-const update = orpc.integrations.update.handler(({ context, input }) => {
+const update = userIntegrations.update.handler(({ context, input }) => {
   const { id, ...changes } = input;
   if (hasChanges(changes)) {
     firstOrThrow(
@@ -62,7 +65,7 @@ const update = orpc.integrations.update.handler(({ context, input }) => {
   );
 });
 
-const remove = orpc.integrations.remove.handler(({ context, input }) => {
+const remove = userIntegrations.remove.handler(({ context, input }) => {
   firstOrThrow(
     context.db
       .delete(integrations)

@@ -5,6 +5,7 @@ import type { RequestContext } from "@/context";
 import { createDb } from "@/lib/db";
 import { EnvSchema } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
+import { createWorkers } from "@/lib/workers";
 import { router } from "@/router";
 import { ConfigSchema } from "@/settings/config.schema";
 
@@ -48,6 +49,7 @@ export function createTestContext(
       },
     },
     events: new MemoryPublisher(),
+    workers: createWorkers(),
     probe: async () => ({
       format: {
         format_name: "matroska,webm",

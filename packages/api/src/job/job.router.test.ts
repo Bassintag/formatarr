@@ -11,6 +11,7 @@ import {
   seedWorker,
   unknownId,
 } from "@/testing/seed";
+import { hashWorkerToken } from "@/worker/worker.lib";
 
 function setup() {
   const { call, db } = createTestCaller();
@@ -130,5 +131,110 @@ describe("jobs", () => {
     expect(call.jobs.get({ id: unknownId })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+});
+
+describe("jobs.update", () => {
+  function setupRunning() {
+    const { call, context, db } = createTestCaller();
+    const library = seedLibrary(db);
+    const file = seedFile(db, library.id, { status: "processing" });
+    const asWorker = (token: string) => {
+      const worker = seedWorker(db, { tokenHash: hashWorkerToken(token) });
+      const request = new Request("http://localhost", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      return { worker, call: createTestCaller({ ...context, request }).call };
+    };
+    const owner = asWorker("owner");
+    const job = seedJob(db, file.id, [], {
+      workerId: owner.worker.id,
+      status: "running",
+    });
+    return { call, file, job, owner, asWorker };
+  }
+
+  test("reports progress", async () => {
+    const { job, owner } = setupRunning();
+
+    const updated = await owner.call.jobs.update({ id: job.id, progress: 40 });
+
+    expect(updated).toMatchObject({
+      status: "running",
+      progress: 40,
+      finishedAt: null,
+    });
+  });
+
+  test("success completes the job and the file", async () => {
+    const { call, file, job, owner } = setupRunning();
+
+    const updated = await owner.call.jobs.update({
+      id: job.id,
+      progress: 100,
+      status: "succeeded",
+    });
+
+    expect(updated).toMatchObject({
+      status: "succeeded",
+      progress: 100,
+      finishedAt: new Date(),
+    });
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      status: "done",
+    });
+  });
+
+  test("failure records the progress and the error", async () => {
+    const { call, file, job, owner } = setupRunning();
+    const updated = await owner.call.jobs.update({
+      id: job.id,
+      progress: 40,
+      status: "failed",
+      error: "boom",
+    });
+
+    expect(updated).toMatchObject({
+      status: "failed",
+      progress: 40,
+      error: "boom",
+    });
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      status: "failed",
+    });
+  });
+
+  test("another worker is rejected", async () => {
+    const { job, asWorker } = setupRunning();
+
+    expect(
+      asWorker("other").call.jobs.update({ id: job.id, progress: 1 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  test("a finished job cannot be updated again", async () => {
+    const { job, owner } = setupRunning();
+    const update = { id: job.id, progress: 100 };
+    await owner.call.jobs.update({ ...update, status: "failed" });
+
+    expect(
+      owner.call.jobs.update({ ...update, status: "succeeded" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  test("unknown jobs are not found", async () => {
+    const { owner } = setupRunning();
+
+    expect(
+      owner.call.jobs.update({ id: unknownId, progress: 1 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  test("user credentials are rejected", async () => {
+    const { call, job } = setupRunning();
+
+    expect(call.jobs.update({ id: job.id, progress: 1 })).rejects.toMatchObject(
+      { code: "UNAUTHORIZED" },
+    );
   });
 });

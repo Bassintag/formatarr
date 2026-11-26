@@ -1,4 +1,5 @@
 import { count, eq, like, type SQL } from "drizzle-orm";
+import { userAuth } from "@/auth/auth.middleware";
 import { files } from "@/db/schema";
 import { fileOptions } from "@/file/file.options";
 import {
@@ -9,8 +10,11 @@ import {
   toPage,
 } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
+import { dispatchTasks } from "@/task/task.lib";
 
-const list = orpc.files.list.handler(({ context, input }) => {
+const userFiles = orpc.files.use(userAuth);
+
+const list = userFiles.list.handler(({ context, input }) => {
   function where(table: typeof files) {
     const conditions: SQL[] = [];
     if (input.libraryId) {
@@ -38,7 +42,7 @@ const list = orpc.files.list.handler(({ context, input }) => {
   );
 });
 
-const get = orpc.files.get.handler(({ context, input }) => {
+const get = userFiles.get.handler(({ context, input }) => {
   return orThrow(
     context.db.query.files
       .findFirst({ ...fileOptions, where: { id: input.id } })
@@ -46,7 +50,7 @@ const get = orpc.files.get.handler(({ context, input }) => {
   );
 });
 
-const update = orpc.files.update.handler(async ({ context, input }) => {
+const update = userFiles.update.handler(async ({ context, input }) => {
   const { id, ignored } = input;
   firstOrThrow(
     context.db
@@ -61,6 +65,7 @@ const update = orpc.files.update.handler(async ({ context, input }) => {
     change: "updated",
     id,
   });
+  if (!ignored) await dispatchTasks(context);
   return orThrow(
     context.db.query.files.findFirst({ ...fileOptions, where: { id } }).sync(),
   );

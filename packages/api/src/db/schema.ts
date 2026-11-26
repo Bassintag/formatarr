@@ -12,7 +12,6 @@ import {
   type RuleValue,
   type Worker,
   type WorkerId,
-  WorkerStatusSchema,
 } from "@formatarr/contract";
 import { sql } from "drizzle-orm";
 import {
@@ -105,9 +104,6 @@ export const workers = sqliteTable("workers", {
   id: integer().primaryKey({ autoIncrement: true }).$type<WorkerId>(),
   name: text().notNull(),
   tokenHash: text("token_hash").notNull(),
-  status: text({ enum: values(WorkerStatusSchema) })
-    .notNull()
-    .default("offline"),
   enabled: integer({ mode: "boolean" }).notNull().default(true),
   capabilities: text({ mode: "json" })
     .$type<Worker["capabilities"]>()

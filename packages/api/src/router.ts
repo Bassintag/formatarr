@@ -8,6 +8,7 @@ import { orpc } from "@/lib/orpc";
 import { librariesRouter } from "@/library/library.router";
 import { scansRouter } from "@/scan/scan.router";
 import { settingsRouter } from "@/settings/settings.router";
+import { tasksRouter } from "@/task/task.router";
 import { workersRouter } from "@/worker/worker.router";
 
 export const router = orpc.router({
@@ -17,6 +18,7 @@ export const router = orpc.router({
   files: filesRouter,
   integrations: integrationsRouter,
   jobs: jobsRouter,
+  tasks: tasksRouter,
   libraries: librariesRouter,
   scans: scansRouter,
   workers: workersRouter,
