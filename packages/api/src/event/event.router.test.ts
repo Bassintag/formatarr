@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { createTestCaller } from "@/testing/harness";
-import { seedFile, seedJob, seedLibrary } from "@/testing/seed";
+import {
+  sampleMediaInfo,
+  seedFile,
+  seedJob,
+  seedLibrary,
+} from "@/testing/seed";
 
 async function subscribed(stream: AsyncIterator<unknown>) {
   const first = stream.next();
@@ -19,7 +24,10 @@ describe("events.stream", () => {
     });
     const asWorker = createTestCaller({ ...context, request }).call;
     const library = seedLibrary(db);
-    const file = seedFile(db, library.id, { status: "queued" });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+    });
     const job = seedJob(db, file.id);
     const stream = await call.events.stream();
     const { first } = await subscribed(stream);

@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AppEvent, WorkerId } from "@formatarr/contract";
 import { eq } from "drizzle-orm";
-import { files, jobs } from "@/db/schema";
+import { files, jobRules, jobs } from "@/db/schema";
 import { claimTask, dispatchTasks, requeueJobs } from "@/task/task.lib";
 import { createTestContext } from "@/testing/harness";
 import {
+  sampleMediaInfo,
   seedFile,
   seedJob,
   seedLibrary,
@@ -20,7 +21,11 @@ function setup() {
   const worker = seedWorker(db);
   const other = seedWorker(db, { tokenHash: "other" });
   const queue = (values: Parameters<typeof seedFile>[2] = {}) => {
-    const file = seedFile(db, library.id, { status: "queued", ...values });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+      ...values,
+    });
     return { file, job: seedJob(db, file.id) };
   };
   const assign = (workerId: WorkerId, status: "running" | "failed") => {
@@ -72,7 +77,10 @@ describe("claimTask", () => {
   test("assigns the oldest queued job to the worker", () => {
     const { context, db, library, worker, queue, fileRow } = setup();
     const rule = seedRule(db, library.id);
-    const file = seedFile(db, library.id, { status: "queued" });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+    });
     const first = seedJob(db, file.id, [rule.id]);
     queue();
 
@@ -89,6 +97,35 @@ describe("claimTask", () => {
       },
     });
     expect(fileRow(file.id)?.status).toBe("processing");
+  });
+
+  test("provides the media info and an output path next to the source", () => {
+    const { context, db, library, worker, queue } = setup();
+    const rule = seedRule(db, library.id, { type: "container", value: "mp4" });
+    const { job } = queue({ path: "/media/Movie (2020).mkv" });
+    db.insert(jobRules).values({ jobId: job.id, ruleId: rule.id }).run();
+
+    expect(claimTask(context.db, worker.id)).toMatchObject({
+      outputPath: "/media/Movie (2020).formatarr.mp4",
+      mediaInfo: sampleMediaInfo,
+    });
+  });
+
+  test("keeps the source extension without a container rule", () => {
+    const { context, worker, queue } = setup();
+    queue({ path: "/media/show.avi" });
+
+    expect(claimTask(context.db, worker.id)?.outputPath).toBe(
+      "/media/show.formatarr.avi",
+    );
+  });
+
+  test("leaves queued the jobs of files without media info", () => {
+    const { context, worker, queue, jobRow } = setup();
+    const { job } = queue({ mediaInfo: null });
+
+    expect(claimTask(context.db, worker.id)).toBeUndefined();
+    expect(jobRow(job.id)?.status).toBe("queued");
   });
 
   test("returns nothing when the queue is empty", () => {
@@ -118,7 +155,11 @@ describe("claimTask", () => {
     const { context, db, worker, queue } = setup();
     queue({ ignored: true });
     const disabled = seedLibrary(db, { enabled: false });
-    seedJob(db, seedFile(db, disabled.id, { status: "queued" }).id);
+    const hidden = seedFile(db, disabled.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+    });
+    seedJob(db, hidden.id);
 
     expect(claimTask(context.db, worker.id)).toBeUndefined();
   });

@@ -45,16 +45,37 @@ async function setup(count: number) {
 describe("normalizeProbe", () => {
   test("normalizes streams and format", () => {
     expect(normalizeProbe(raw)).toEqual({
-      container: "matroska",
+      container: "mkv",
       durationSeconds: 12.5,
       bitrate: 4000,
-      video: { codec: "h264", width: 1920, height: 1080 },
+      video: { codec: "h264", width: 1920, height: 1080, bitrate: 4000 },
       audio: [
         { codec: "aac", language: "eng", channels: 6 },
         { codec: "ac3", language: null, channels: 2 },
       ],
       subtitles: [{ codec: "subrip", language: null }],
     });
+  });
+
+  test("maps the container to its rule value", () => {
+    const format = { format_name: "mov,mp4,m4a,3gp,3g2,mj2" };
+    expect(normalizeProbe({ ...raw, format }).container).toBe("mp4");
+    expect(
+      normalizeProbe({ ...raw, format: { format_name: "avi" } }).container,
+    ).toBe("avi");
+  });
+
+  test("reads the video bitrate from the stream, then its tags", () => {
+    const bitrate = (video: object) =>
+      normalizeProbe({
+        ...raw,
+        streams: [{ codec_type: "video", ...video }],
+      }).video.bitrate;
+
+    expect(bitrate({ bit_rate: "3000", tags: { BPS: "2000" } })).toBe(3000);
+    expect(bitrate({ tags: { BPS: "2000" } })).toBe(2000);
+    expect(bitrate({ tags: { "BPS-eng": "1000" } })).toBe(1000);
+    expect(bitrate({})).toBe(4000);
   });
 
   test("throws without a video stream", () => {
@@ -69,7 +90,7 @@ describe("probeFiles", () => {
     const { context, ids } = await setup(2);
     await probeFiles({ ...context, probe: async () => raw }, ids);
     const rows = context.db.select().from(files).all();
-    expect(rows.every((r) => r.mediaInfo?.container === "matroska")).toBe(true);
+    expect(rows.every((r) => r.mediaInfo?.container === "mkv")).toBe(true);
     expect(rows.every((r) => r.status === "pending")).toBe(true);
   });
 

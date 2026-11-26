@@ -24,6 +24,7 @@ export const MediaInfoSchema = z.object({
     codec: z.string(),
     width: z.number(),
     height: z.number(),
+    bitrate: z.number(),
   }),
   audio: z.array(
     z.object({

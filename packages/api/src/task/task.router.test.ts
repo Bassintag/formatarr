@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import type { Task } from "@formatarr/contract";
 import { createJobsForFiles } from "@/job/job.lib";
 import { createTestCaller } from "@/testing/harness";
-import { seedFile, seedJob, seedLibrary, seedRule } from "@/testing/seed";
+import {
+  sampleMediaInfo,
+  seedFile,
+  seedJob,
+  seedLibrary,
+  seedRule,
+} from "@/testing/seed";
 
 async function setup() {
   const { call, context, db } = createTestCaller();
@@ -15,7 +21,10 @@ async function setup() {
   const asWorker = createTestCaller({ ...context, request }).call;
   const library = seedLibrary(db);
   const queue = () => {
-    const file = seedFile(db, library.id, { status: "queued" });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+    });
     return seedJob(db, file.id);
   };
   const connect = async () => {
@@ -67,7 +76,7 @@ describe("tasks.stream", () => {
     const { context, db, library, connect, worker } = await setup();
     seedRule(db, library.id, { type: "container", value: "mp4" });
     const file = seedFile(db, library.id, {
-      mediaInfo: { container: "matroska" } as never,
+      mediaInfo: sampleMediaInfo,
     });
     const { stream } = await connect();
     const next = stream.next();
@@ -146,7 +155,11 @@ describe("tasks.stream", () => {
 
   test("receives a job once its file is no longer ignored", async () => {
     const { call, db, library, connect } = await setup();
-    const file = seedFile(db, library.id, { status: "queued", ignored: true });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      ignored: true,
+      mediaInfo: sampleMediaInfo,
+    });
     const job = seedJob(db, file.id);
     const { stream } = await connect();
     const next = stream.next();

@@ -10,8 +10,7 @@ test("LibraryRuleSchema accepts a valid rule for every type", () => {
     maxResolution: 1080,
     maxBitrate: 8000,
     audioCodec: "aac",
-    audioLanguages: ["eng", "fra"],
-    subtitleLanguages: [],
+    subtitleLanguages: ["eng", "fra"],
   };
   for (const [type, value] of Object.entries(values)) {
     expect(LibraryRuleSchema.safeParse({ ...rule, type, value }).success).toBe(
@@ -25,7 +24,10 @@ test("LibraryRuleSchema rejects a value that does not match the type", () => {
     { type: "container", value: 1 },
     { type: "maxBitrate", value: "high" },
     { type: "maxResolution", value: -1 },
-    { type: "audioLanguages", value: "eng" },
+    { type: "container", value: "avi" },
+    { type: "videoCodec", value: "mpeg2video" },
+    { type: "audioCodec", value: "dts" },
+    { type: "subtitleLanguages", value: "eng" },
     { type: "subtitleLanguages", value: [1] },
   ];
   for (const item of invalid) {

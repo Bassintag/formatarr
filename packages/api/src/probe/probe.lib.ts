@@ -19,6 +19,7 @@ const RawStreamSchema = z.object({
   width: z.number().optional(),
   height: z.number().optional(),
   channels: z.number().optional(),
+  bit_rate: z.coerce.number().optional(),
   tags: z.record(z.string(), z.string()).optional(),
 });
 
@@ -69,19 +70,34 @@ function language(stream: RawStream) {
   return value && value !== "und" ? value : null;
 }
 
+const CONTAINER_NAMES: Record<string, string> = {
+  matroska: "mkv",
+  mov: "mp4",
+};
+
+function container(formatName: string | undefined) {
+  const name = formatName?.split(",")[0] ?? "unknown";
+  return CONTAINER_NAMES[name] ?? name;
+}
+
+function videoBitrate({ bit_rate, tags }: RawStream) {
+  return bit_rate || Number(tags?.BPS ?? tags?.["BPS-eng"]) || undefined;
+}
+
 export function normalizeProbe(raw: unknown): MediaInfo {
   const { format, streams } = RawProbeSchema.parse(raw);
   const video = streams.find((s) => s.codec_type === "video");
   if (!video) throw new Error("no video stream");
 
   return MediaInfoSchema.parse({
-    container: format.format_name?.split(",")[0] ?? "unknown",
+    container: container(format.format_name),
     durationSeconds: format.duration ?? 0,
     bitrate: format.bit_rate ?? 0,
     video: {
       codec: video.codec_name ?? "unknown",
       width: video.width ?? 0,
       height: video.height ?? 0,
+      bitrate: videoBitrate(video) ?? format.bit_rate ?? 0,
     },
     audio: streams
       .filter((s) => s.codec_type === "audio")

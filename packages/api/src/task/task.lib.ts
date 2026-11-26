@@ -1,4 +1,6 @@
+import { join, parse } from "node:path";
 import type {
+  Job,
   JobId,
   JobStatus,
   JobUpdate,
@@ -23,6 +25,14 @@ export async function publishJobStatus(
   }
 }
 
+// TODO: replace once files are transferred over the network
+function temporaryOutputPath(sourcePath: string, rules: Job["rules"]) {
+  const { dir, name, ext } = parse(sourcePath);
+  const container = rules.find((rule) => rule.type === "container");
+  const extension = container ? `.${container.value}` : ext;
+  return join(dir, `${name}.formatarr${extension}`);
+}
+
 export function claimTask(db: Context["db"], workerId: WorkerId) {
   return db.transaction((tx) => {
     const worker = tx.query.workers
@@ -36,15 +46,20 @@ export function claimTask(db: Context["db"], workerId: WorkerId) {
     const next = tx.query.jobs
       .findFirst({
         columns: { id: true, fileId: true },
-        with: { file: { columns: { path: true } } },
+        with: { file: { columns: { path: true, mediaInfo: true } } },
         where: {
           status: "queued",
-          file: { ignored: false, library: { enabled: true } },
+          file: {
+            ignored: false,
+            mediaInfo: { isNotNull: true },
+            library: { enabled: true },
+          },
         },
         orderBy: { id: "asc" },
       })
       .sync();
-    if (!next?.file) return;
+    if (!next?.file?.mediaInfo) return;
+    const { path, mediaInfo } = next.file;
     tx.update(jobs)
       .set({ status: "running", workerId, startedAt: new Date() })
       .where(eq(jobs.id, next.id))
@@ -53,7 +68,13 @@ export function claimTask(db: Context["db"], workerId: WorkerId) {
       .set({ status: "processing" })
       .where(eq(files.id, next.fileId))
       .run();
-    return { job: getJob(tx, next.id), sourcePath: next.file.path };
+    const job = getJob(tx, next.id);
+    return {
+      job,
+      sourcePath: path,
+      outputPath: temporaryOutputPath(path, job.rules),
+      mediaInfo,
+    };
   });
 }
 

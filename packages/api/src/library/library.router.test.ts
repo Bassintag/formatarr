@@ -266,10 +266,10 @@ describe("libraries scan scheduling", () => {
 });
 
 const mediaInfo: MediaInfo = {
-  container: "matroska",
+  container: "mp4",
   durationSeconds: 100,
   bitrate: 5000,
-  video: { codec: "h264", width: 1920, height: 1080 },
+  video: { codec: "h264", width: 1920, height: 1080, bitrate: 4500 },
   audio: [{ codec: "aac", language: "eng", channels: 2 }],
   subtitles: [],
 };
@@ -280,7 +280,6 @@ const sample: Record<RuleType, LibraryRule> = {
   maxResolution: { enabled: true, type: "maxResolution", value: 1080 },
   maxBitrate: { enabled: true, type: "maxBitrate", value: 8000 },
   audioCodec: { enabled: true, type: "audioCodec", value: "aac" },
-  audioLanguages: { enabled: true, type: "audioLanguages", value: ["eng"] },
   subtitleLanguages: {
     enabled: true,
     type: "subtitleLanguages",
@@ -430,7 +429,7 @@ describe("libraries rules", () => {
 
     await call.libraries.update({
       id: library,
-      rules: [{ enabled: true, type: "container", value: "matroska" }],
+      rules: [{ enabled: true, type: "container", value: "mp4" }],
     });
 
     expect(statusOf(pending)).toBe("done");
@@ -528,7 +527,7 @@ describe("libraries previews", () => {
     expect(preview.items[0]?.mismatches).toEqual([
       {
         rule: { type: "container", value: "mkv" },
-        reason: "Container is matroska, expected mkv",
+        reason: "Container is mp4, expected mkv",
       },
     ]);
   });

@@ -18,11 +18,9 @@ export function isRuleSatisified(
     case "maxResolution":
       return mediaInfo.video.height <= rule.value;
     case "maxBitrate":
-      return mediaInfo.bitrate <= rule.value;
+      return mediaInfo.video.bitrate <= rule.value;
     case "audioCodec":
       return mediaInfo.audio.every((track) => track.codec === rule.value);
-    case "audioLanguages":
-      return onlyAllowed(mediaInfo.audio, rule.value);
     case "subtitleLanguages":
       return onlyAllowed(mediaInfo.subtitles, rule.value);
   }
@@ -44,7 +42,7 @@ function describeMismatch(rule: RuleValue, mediaInfo: MediaInfo): string {
     case "maxResolution":
       return `Resolution ${mediaInfo.video.height}p exceeds max ${rule.value}p`;
     case "maxBitrate":
-      return `Bitrate ${mediaInfo.bitrate} exceeds max ${rule.value}`;
+      return `Video bitrate ${mediaInfo.video.bitrate} exceeds max ${rule.value}`;
     case "audioCodec": {
       const others = new Set(
         mediaInfo.audio
@@ -53,8 +51,6 @@ function describeMismatch(rule: RuleValue, mediaInfo: MediaInfo): string {
       );
       return `Audio codecs ${[...others].join(", ")} differ from ${rule.value}`;
     }
-    case "audioLanguages":
-      return `Audio languages not allowed: ${disallowed(mediaInfo.audio, rule.value)}`;
     case "subtitleLanguages":
       return `Subtitle languages not allowed: ${disallowed(mediaInfo.subtitles, rule.value)}`;
   }

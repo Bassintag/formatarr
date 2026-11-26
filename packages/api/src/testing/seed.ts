@@ -1,4 +1,4 @@
-import type { FileId, LibraryId, RuleId } from "@formatarr/contract";
+import type { FileId, LibraryId, MediaInfo, RuleId } from "@formatarr/contract";
 import type { Context } from "@/context";
 import { files, jobRules, jobs, libraries, rules, workers } from "@/db/schema";
 
@@ -10,6 +10,15 @@ type JobValues = Partial<typeof jobs.$inferInsert>;
 type WorkerValues = Partial<typeof workers.$inferInsert>;
 
 export const unknownId = 999 as never;
+
+export const sampleMediaInfo: MediaInfo = {
+  container: "mkv",
+  durationSeconds: 100,
+  bitrate: 5000,
+  video: { codec: "h264", width: 1920, height: 1080, bitrate: 4500 },
+  audio: [{ codec: "aac", language: "eng", channels: 2 }],
+  subtitles: [],
+};
 
 let sequence = 0;
 
