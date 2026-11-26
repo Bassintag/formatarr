@@ -1,6 +1,15 @@
-import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  spyOn,
+  test,
+} from "bun:test";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import fs from "node:fs";
+import { chmod, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +17,9 @@ import { type ApiClient, contract, type JobId } from "@formatarr/contract";
 import { createORPCClient } from "@orpc/client";
 import { OpenAPILink } from "@orpc/openapi/fetch";
 import { createFetchHandler } from "@/app";
+import { files, jobs } from "@/db/schema";
+import { scanLibrary } from "@/scan/scan.lib";
+import { requeueJobs } from "@/task/task.lib";
 import { createTestCaller } from "@/testing/harness";
 import {
   sampleMediaInfo,
@@ -31,8 +43,25 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function setup() {
-  const { call, context, db } = createTestCaller();
+type SetupOptions = {
+  name?: string;
+  container?: string;
+  probe?: () => Promise<unknown>;
+};
+
+function probed(formatName: string, codecType = "video") {
+  return async () => ({
+    format: { format_name: formatName, duration: "100", bit_rate: "1000" },
+    streams: [{ codec_type: codecType, codec_name: "hevc" }],
+  });
+}
+
+async function setup({
+  name = "movie.mkv",
+  container = "mkv",
+  probe = probed("matroska,webm"),
+}: SetupOptions = {}) {
+  const { call, context, db } = createTestCaller({ probe });
   const library = seedLibrary(db, { path: root });
   const asWorker = (token: string) => {
     const worker = seedWorker(db, { tokenHash: hashWorkerToken(token) });
@@ -42,23 +71,55 @@ async function setup() {
     return { worker, call: createTestCaller({ ...context, request }).call };
   };
   const owner = asWorker("owner");
-  const path = join(root, "movie.mkv");
+  const path = join(root, name);
   await Bun.write(path, source);
   const file = seedFile(db, library.id, {
     path,
     size: source.length,
     status: "processing",
-    mediaInfo: sampleMediaInfo,
+    mediaInfo: { ...sampleMediaInfo, container },
   });
   const job = seedJob(db, file.id, [], {
     workerId: owner.worker.id,
     status: "running",
+    startedAt: new Date(),
   });
   return { call, context, db, library, file, job, path, owner, asWorker };
 }
 
 async function partials() {
   return (await readdir(root)).filter((name) => name.endsWith(".part"));
+}
+
+async function expectUntouched(state: Awaited<ReturnType<typeof setup>>) {
+  const { call, job, file, path } = state;
+  expect(await Bun.file(path).bytes()).toEqual(source);
+  expect(await partials()).toEqual([]);
+  expect((await call.jobs.get({ id: job.id })).status).toBe("running");
+  expect(await call.files.get({ id: file.id })).toMatchObject({
+    path,
+    size: source.length,
+    status: "processing",
+  });
+}
+
+function during(action: () => unknown) {
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        await action();
+        controller.enqueue(output);
+        controller.close();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+}
+
+function failing(code: string) {
+  return () => {
+    throw Object.assign(new Error(code), { code });
+  };
 }
 
 async function bytes(stream: ReadableStream<Uint8Array>) {
@@ -101,8 +162,9 @@ describe("jobs.source", () => {
 });
 
 describe("jobs.result", () => {
-  test("stores the result next to the source and completes the job", async () => {
+  test("replaces the source and completes the job", async () => {
     const { call, owner, job, file, path } = await setup();
+    await chmod(path, 0o640);
 
     const updated = await owner.call.jobs.result(upload(job.id));
 
@@ -112,15 +174,169 @@ describe("jobs.result", () => {
       finishedAt: new Date(),
     });
     expect(await call.files.get({ id: file.id })).toMatchObject({
+      path,
+      size: output.length,
       status: "done",
+      mediaInfo: { video: { codec: "hevc" } },
     });
-    const [partial, ...others] = await partials();
-    expect(others).toEqual([]);
-    expect(partial).toStartWith(`.formatarr-${job.id}-`);
-    expect(await Bun.file(join(root, partial as string)).bytes()).toEqual(
-      output,
-    );
-    expect(await Bun.file(path).bytes()).toEqual(source);
+    expect(await Bun.file(path).bytes()).toEqual(output);
+    expect((await stat(path)).mode & 0o777).toBe(0o640);
+    expect(await readdir(root)).toEqual(["movie.mkv"]);
+  });
+
+  test("renames the file when the container changes", async () => {
+    const { call, owner, job, file } = await setup({
+      name: "movie.avi",
+      container: "avi",
+    });
+
+    await owner.call.jobs.result(upload(job.id));
+
+    const target = join(root, "movie.mkv");
+    expect(await readdir(root)).toEqual(["movie.mkv"]);
+    expect(await Bun.file(target).bytes()).toEqual(output);
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      path: target,
+      mediaInfo: { container: "mkv" },
+    });
+  });
+
+  test("renames the file when hard links are not supported", async () => {
+    const { owner, job } = await setup({
+      name: "movie.avi",
+      container: "avi",
+    });
+    spyOn(fs, "linkSync").mockImplementation(failing("EPERM"));
+
+    await owner.call.jobs.result(upload(job.id));
+
+    expect(await readdir(root)).toEqual(["movie.mkv"]);
+  });
+
+  test.each([
+    ["with hard links", false],
+    ["without hard links", true],
+  ])("never overwrites another file %s", async (_, unsupported) => {
+    const state = await setup({ name: "movie.avi", container: "avi" });
+    const target = join(root, "movie.mkv");
+    await Bun.write(target, "other");
+    if (unsupported) {
+      spyOn(fs, "linkSync").mockImplementation(failing("EPERM"));
+    }
+
+    await expect(
+      state.owner.call.jobs.result(upload(state.job.id)),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await Bun.file(target).text()).toBe("other");
+    await expectUntouched(state);
+  });
+
+  test("rejects a target already known to the library", async () => {
+    const state = await setup({ name: "movie.avi", container: "avi" });
+    const target = join(root, "movie.mkv");
+    seedFile(state.db, state.library.id, { path: target });
+
+    await expect(
+      state.owner.call.jobs.result(upload(state.job.id)),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await Bun.file(target).exists()).toBe(false);
+    await expectUntouched(state);
+  });
+
+  test.each([
+    [
+      "ffprobe cannot read",
+      async () => {
+        throw new Error("invalid data");
+      },
+    ],
+    ["without a video stream", probed("matroska,webm", "audio")],
+    ["in an unsupported container", probed("avi")],
+  ])("rejects a result %s", async (_, probe) => {
+    const state = await setup({ probe });
+
+    await expect(
+      state.owner.call.jobs.result(upload(state.job.id)),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    await expectUntouched(state);
+  });
+
+  test("rejects a source that changed during the upload", async () => {
+    const { call, owner, job, path } = await setup();
+    const body = during(() => Bun.write(path, "changed"));
+
+    await expect(
+      owner.call.jobs.result({ ...upload(job.id), body }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await Bun.file(path).text()).toBe("changed");
+    expect(await partials()).toEqual([]);
+    expect((await call.jobs.get({ id: job.id })).status).toBe("running");
+  });
+
+  test("rejects a source removed during the upload", async () => {
+    const { owner, job, path } = await setup();
+    const body = during(() => rm(path));
+
+    await expect(
+      owner.call.jobs.result({ ...upload(job.id), body }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  test("rejects an upload from a previous attempt", async () => {
+    const state = await setup();
+    const { db, owner, job } = state;
+    const body = during(() => {
+      db.transaction((tx) => requeueJobs(tx));
+      db.update(jobs)
+        .set({
+          status: "running",
+          workerId: owner.worker.id,
+          startedAt: new Date(Date.now() + 1000),
+        })
+        .run();
+      db.update(files).set({ status: "processing" }).run();
+    });
+
+    await expect(
+      owner.call.jobs.result({ ...upload(job.id), body }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await expectUntouched(state);
+  });
+
+  test("keeps everything when the replacement fails", async () => {
+    const state = await setup();
+    spyOn(fs, "renameSync").mockImplementation(failing("EIO"));
+
+    await expect(
+      state.owner.call.jobs.result(upload(state.job.id)),
+    ).rejects.toThrow();
+
+    await expectUntouched(state);
+  });
+
+  test.each([
+    ["at the same path", "movie.mkv", "mkv"],
+    ["under a new name", "movie.avi", "avi"],
+  ])("is not seen as new by a scan %s", async (_, name, container) => {
+    const { context, db, library, owner, job } = await setup({
+      name,
+      container,
+    });
+    await owner.call.jobs.result(upload(job.id));
+
+    expect(await scanLibrary(context, library.id)).toEqual({
+      created: 0,
+      updated: 0,
+      deleted: 0,
+    });
+    expect(db.select().from(jobs).all()).toHaveLength(1);
   });
 
   test("dispatches the next job", async () => {
@@ -177,13 +393,7 @@ describe("jobs.result", () => {
 
   test("discards the result of a job removed during the upload", async () => {
     const { call, owner, job } = await setup();
-    const body = new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        await call.jobs.remove({ id: job.id });
-        controller.enqueue(output);
-        controller.close();
-      },
-    });
+    const body = during(() => call.jobs.remove({ id: job.id }));
 
     await expect(
       owner.call.jobs.result({ ...upload(job.id), body }),
@@ -228,17 +438,14 @@ describe("transfers over HTTP", () => {
   }
 
   test("downloads the source and uploads a result above the body limit", async () => {
-    const { client, job } = await serve();
+    const { client, job, path } = await serve();
 
     const downloaded = await client.jobs.source({ id: job.id });
     expect(await bytes(downloaded)).toEqual(source);
     const updated = await client.jobs.result(upload(job.id));
 
     expect(updated.status).toBe("succeeded");
-    const [partial] = await partials();
-    expect(await Bun.file(join(root, partial as string)).bytes()).toEqual(
-      output,
-    );
+    expect(await Bun.file(path).bytes()).toEqual(output);
   });
 
   test("keeps the body limit on other routes", async () => {

@@ -100,6 +100,13 @@ export function mockFileSystem(initial: Record<string, string> = {}) {
     write(to, content);
   }) as never);
 
+  spyOn(fs, "statSync").mockImplementation(((path: string) => {
+    const content = contents.get(path);
+    return content === undefined
+      ? undefined
+      : { size: Buffer.byteLength(content) };
+  }) as never);
+
   spyOn(fs, "mkdirSync").mockImplementation(((path: string) => {
     directories.add(path);
     addDirectories(path);

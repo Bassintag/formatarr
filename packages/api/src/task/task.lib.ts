@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import type {
+  FileId,
   JobId,
   JobStatus,
   JobUpdate,
@@ -8,7 +9,7 @@ import type {
 import { and, eq, inArray } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files, jobs } from "@/db/schema";
-import { getJob } from "@/job/job.lib";
+import { getJob, JOB_CHUNK_SIZE } from "@/job/job.lib";
 import { firstOrThrow, type Tx } from "@/lib/db";
 import { MAX_RUNNING_JOBS } from "@/worker/worker.options";
 
@@ -83,44 +84,78 @@ export async function dispatchTasks(context: TaskContext) {
   );
 }
 
-export async function updateJob(
-  context: TaskContext,
+export function applyJobChanges(
+  tx: Tx,
   workerId: WorkerId,
   { id, ...changes }: JobChanges,
 ) {
   const { status } = changes;
-  context.db.transaction((tx) => {
-    const job = firstOrThrow(
-      tx
-        .update(jobs)
-        .set({ ...changes, finishedAt: status && new Date() })
-        .where(
-          and(
-            eq(jobs.id, id),
-            eq(jobs.workerId, workerId),
-            eq(jobs.status, "running"),
-          ),
-        )
-        .returning({ fileId: jobs.fileId })
-        .all(),
-    );
-    if (!status) return;
-    tx.update(files)
-      .set({ status: status === "succeeded" ? "done" : "failed" })
-      .where(and(eq(files.id, job.fileId), eq(files.status, "processing")))
-      .run();
-  });
+  const job = firstOrThrow(
+    tx
+      .update(jobs)
+      .set({ ...changes, finishedAt: status && new Date() })
+      .where(
+        and(
+          eq(jobs.id, id),
+          eq(jobs.workerId, workerId),
+          eq(jobs.status, "running"),
+        ),
+      )
+      .returning({ fileId: jobs.fileId })
+      .all(),
+  );
+  if (!status) return;
+  tx.update(files)
+    .set({ status: status === "succeeded" ? "done" : "failed" })
+    .where(and(eq(files.id, job.fileId), eq(files.status, "processing")))
+    .run();
+}
+
+export async function announceJob(
+  context: TaskContext,
+  id: JobId,
+  status: JobStatus,
+) {
+  await publishJobStatus(context.events, [id], status);
+  await dispatchTasks(context);
+}
+
+export async function updateJob(
+  context: TaskContext,
+  workerId: WorkerId,
+  changes: JobChanges,
+) {
+  const { id, status, progress } = changes;
+  context.db.transaction((tx) => applyJobChanges(tx, workerId, changes));
   if (status) {
-    await publishJobStatus(context.events, [id], status);
-    await dispatchTasks(context);
+    await announceJob(context, id, status);
   } else {
     await context.events.publish("event", {
       type: "job.progress",
       id,
-      progress: changes.progress,
+      progress,
     });
   }
   return getJob(context.db, id);
+}
+
+export function cancelJobs(tx: Tx, fileIds: FileId[]) {
+  const cancelled: JobId[] = [];
+  for (let start = 0; start < fileIds.length; start += JOB_CHUNK_SIZE) {
+    const chunk = tx
+      .update(jobs)
+      .set({ status: "cancelled", finishedAt: new Date() })
+      .where(
+        and(
+          inArray(jobs.fileId, fileIds.slice(start, start + JOB_CHUNK_SIZE)),
+          inArray(jobs.status, ["queued", "running"]),
+        ),
+      )
+      .returning({ id: jobs.id })
+      .all();
+    cancelled.push(...chunk.map((job) => job.id));
+  }
+  return cancelled;
 }
 
 export function requeueJobs(tx: Tx, workerId?: WorkerId) {

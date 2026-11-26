@@ -1,5 +1,6 @@
+import fs from "node:fs";
 import { extname } from "node:path";
-import type { FileId, LibraryId } from "@formatarr/contract";
+import type { FileId, JobId, LibraryId } from "@formatarr/contract";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Context } from "@/context";
 import { files } from "@/db/schema";
@@ -7,7 +8,7 @@ import { createJobsForFiles } from "@/job/job.lib";
 import { orThrow } from "@/lib/db";
 import { assertDirectory } from "@/library/library.lib";
 import { probeFiles } from "@/probe/probe.lib";
-import { dispatchTasks } from "@/task/task.lib";
+import { cancelJobs, dispatchTasks, publishJobStatus } from "@/task/task.lib";
 
 const MEDIA_EXTENSIONS = new Set([
   ".mkv",
@@ -47,6 +48,10 @@ async function walkMedia(root: string) {
   return found;
 }
 
+function sizeOnDisk(path: string) {
+  return fs.statSync(path, { throwIfNoEntry: false })?.size;
+}
+
 export async function scanLibrary(
   context: ScanContext,
   libraryId: LibraryId,
@@ -61,6 +66,7 @@ export async function scanLibrary(
   const created: FileId[] = [];
   const updated: FileId[] = [];
   const deleted: FileId[] = [];
+  let cancelled: JobId[] = [];
 
   db.transaction((tx) => {
     const existing = tx
@@ -72,7 +78,8 @@ export async function scanLibrary(
 
     for (const row of existing) {
       known.add(row.path);
-      const size = onDisk.get(row.path);
+      if (onDisk.get(row.path) === row.size) continue;
+      const size = sizeOnDisk(row.path);
       if (size === undefined) {
         deleted.push(row.id);
       } else if (size !== row.size) {
@@ -83,6 +90,8 @@ export async function scanLibrary(
         updated.push(row.id);
       }
     }
+
+    cancelled = cancelJobs(tx, updated);
 
     for (let start = 0; start < deleted.length; start += DELETE_CHUNK_SIZE) {
       tx.delete(files)
@@ -95,8 +104,10 @@ export async function scanLibrary(
         .run();
     }
 
-    for (const [path, size] of onDisk) {
+    for (const path of onDisk.keys()) {
       if (known.has(path)) continue;
+      const size = sizeOnDisk(path);
+      if (size === undefined) continue;
       const row = tx
         .insert(files)
         .values({ libraryId, path, size })
@@ -106,7 +117,8 @@ export async function scanLibrary(
     }
   });
 
-  if (deleted.length > 0) await dispatchTasks(context);
+  await publishJobStatus(context.events, cancelled, "cancelled");
+  if (deleted.length > 0 || cancelled.length > 0) await dispatchTasks(context);
 
   await probeFiles(context, [...created, ...updated]);
   await createJobsForFiles(context, [...created, ...updated]);

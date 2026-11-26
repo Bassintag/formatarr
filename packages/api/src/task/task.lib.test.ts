@@ -3,7 +3,12 @@ import { basename } from "node:path";
 import type { AppEvent, WorkerId } from "@formatarr/contract";
 import { eq } from "drizzle-orm";
 import { files, jobs } from "@/db/schema";
-import { claimTask, dispatchTasks, requeueJobs } from "@/task/task.lib";
+import {
+  cancelJobs,
+  claimTask,
+  dispatchTasks,
+  requeueJobs,
+} from "@/task/task.lib";
 import { createTestContext } from "@/testing/harness";
 import {
   sampleMediaInfo,
@@ -281,5 +286,27 @@ describe("dispatchTasks", () => {
     await dispatchTasks(context);
 
     expect(jobRow(job.id)?.status).toBe("queued");
+  });
+});
+
+describe("cancelJobs", () => {
+  test("cancels the active jobs of the given files only", () => {
+    const { db, worker, queue, assign, jobRow } = setup();
+    const queued = queue();
+    const running = assign(worker.id, "running");
+    const failed = assign(worker.id, "failed");
+    const untouched = queue();
+
+    const cancelled = db.transaction((tx) =>
+      cancelJobs(tx, [queued.file.id, running.file.id, failed.file.id]),
+    );
+
+    expect(cancelled).toEqual([queued.job.id, running.job.id]);
+    expect(jobRow(running.job.id)).toMatchObject({
+      status: "cancelled",
+      finishedAt: new Date(),
+    });
+    expect(jobRow(failed.job.id)?.status).toBe("failed");
+    expect(jobRow(untouched.job.id)?.status).toBe("queued");
   });
 });
