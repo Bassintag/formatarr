@@ -4,6 +4,7 @@ import { jobs } from "@/db/schema";
 import { firstOrThrow } from "@/lib/db";
 import { createTestCaller } from "@/testing/harness";
 import {
+  sampleMediaInfo,
   seedFile,
   seedJob,
   seedLibrary,
@@ -76,6 +77,7 @@ describe("jobs", () => {
       workerId: null,
       status: "queued",
       progress: 0,
+      attempts: 0,
       error: null,
       createdAt: job.createdAt,
       startedAt: null,
@@ -135,7 +137,7 @@ describe("jobs", () => {
 });
 
 describe("jobs.update", () => {
-  function setupRunning() {
+  function setupRunning({ attempts = 3 } = {}) {
     const { call, context, db } = createTestCaller();
     const library = seedLibrary(db);
     const file = seedFile(db, library.id, { status: "processing" });
@@ -150,6 +152,7 @@ describe("jobs.update", () => {
     const job = seedJob(db, file.id, [], {
       workerId: owner.worker.id,
       status: "running",
+      attempts,
     });
     return { call, file, job, owner, asWorker };
   }
@@ -186,6 +189,54 @@ describe("jobs.update", () => {
     });
   });
 
+  test("failure requeues the job while retries remain", async () => {
+    const { call, file, job, owner } = setupRunning({ attempts: 2 });
+
+    const updated = await owner.call.jobs.update({
+      id: job.id,
+      progress: 40,
+      status: "failed",
+      error: "boom",
+    });
+
+    expect(updated).toMatchObject({
+      status: "queued",
+      workerId: null,
+      progress: 0,
+      error: null,
+      finishedAt: null,
+    });
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      status: "queued",
+    });
+    expect(await call.jobs.logs({ id: job.id })).toEqual([
+      { message: "boom", createdAt: expect.any(Date) },
+    ]);
+  });
+
+  test("retries follow the settings", async () => {
+    const { call, job, owner } = setupRunning({ attempts: 1 });
+    await call.settings.update({ jobs: { maxRetries: 0 } });
+
+    const updated = await owner.call.jobs.update({
+      id: job.id,
+      progress: 0,
+      status: "failed",
+    });
+
+    expect(updated).toMatchObject({ status: "failed", error: "Failed" });
+  });
+
+  test("heartbeats mark the worker as seen", async () => {
+    const { call, job, owner } = setupRunning();
+
+    await owner.call.jobs.update({ id: job.id, progress: 1 });
+
+    expect(await call.workers.get({ id: owner.worker.id })).toMatchObject({
+      lastSeenAt: new Date(),
+    });
+  });
+
   test("another worker is rejected", async () => {
     const { job, asWorker } = setupRunning();
 
@@ -217,6 +268,95 @@ describe("jobs.update", () => {
 
     expect(call.jobs.update({ id: job.id, progress: 1 })).rejects.toMatchObject(
       { code: "UNAUTHORIZED" },
+    );
+  });
+});
+
+describe("jobs.create", () => {
+  function setupFile(
+    values: Parameters<typeof seedFile>[2] = {},
+    overrides: Parameters<typeof createTestCaller>[0] = {},
+  ) {
+    const { call, db } = createTestCaller(overrides);
+    const library = seedLibrary(db);
+    seedRule(db, library.id, { type: "container", value: "mp4" });
+    const file = seedFile(db, library.id, {
+      status: "failed",
+      mediaInfo: sampleMediaInfo,
+      ...values,
+    });
+    return { call, db, file };
+  }
+
+  test("requeues a failed file and keeps the failed job", async () => {
+    const { call, db, file } = setupFile();
+    const failed = seedJob(db, file.id, [], { status: "failed", attempts: 3 });
+
+    const job = await call.jobs.create({ fileId: file.id });
+
+    expect(job).toMatchObject({
+      fileId: file.id,
+      status: "queued",
+      attempts: 0,
+    });
+    expect(job.id).not.toBe(failed.id);
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      status: "queued",
+    });
+    expect(await call.jobs.get({ id: failed.id })).toMatchObject({
+      status: "failed",
+    });
+  });
+
+  test("probes again a file without media info", async () => {
+    const { call, file } = setupFile({ mediaInfo: null });
+
+    const job = await call.jobs.create({ fileId: file.id });
+
+    expect(job.status).toBe("queued");
+    expect((await call.files.get({ id: file.id })).mediaInfo).not.toBeNull();
+  });
+
+  test("leaves failed a file that still cannot be probed", async () => {
+    const { call, file } = setupFile(
+      { mediaInfo: null },
+      {
+        probe: async () => {
+          throw new Error("corrupted");
+        },
+      },
+    );
+
+    await expect(call.jobs.create({ fileId: file.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+
+    expect(await call.files.get({ id: file.id })).toMatchObject({
+      status: "failed",
+    });
+  });
+
+  test.each(["queued", "running"] as const)(
+    "refuses a file with a %s job",
+    async (status) => {
+      const { call, db, file } = setupFile({ status: "processing" });
+      seedJob(db, file.id, [], { status });
+
+      await expect(call.jobs.create({ fileId: file.id })).rejects.toMatchObject(
+        { code: "CONFLICT" },
+      );
+
+      expect(await call.files.get({ id: file.id })).toMatchObject({
+        status: "processing",
+      });
+    },
+  );
+
+  test("an unknown file is not found", async () => {
+    const { call } = setup();
+
+    await expect(call.jobs.create({ fileId: unknownId })).rejects.toMatchObject(
+      { code: "NOT_FOUND" },
     );
   });
 });

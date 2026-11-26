@@ -23,6 +23,7 @@ describe("events.stream", () => {
       headers: { authorization: `Bearer ${worker.token}` },
     });
     const asWorker = createTestCaller({ ...context, request }).call;
+    await call.settings.update({ jobs: { maxRetries: 0 } });
     const library = seedLibrary(db);
     const file = seedFile(db, library.id, {
       status: "queued",

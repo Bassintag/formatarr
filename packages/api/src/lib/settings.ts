@@ -40,6 +40,7 @@ export function createSettings(dataDir: string) {
     const current = await load();
     const next = ConfigSchema.parse({
       auth: { ...current.auth, ...patch.auth },
+      jobs: { ...current.jobs, ...patch.jobs },
     });
     await write(next);
     load.cache.clear();

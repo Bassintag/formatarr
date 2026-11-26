@@ -1,11 +1,13 @@
 import { buildFfmpegArgs, type TranscodeInput } from "@/lib/ffmpeg/command";
 import type { Accelerators } from "@/lib/ffmpeg/encoders";
+import type { JobLogger } from "@/lib/logger";
 
 const STDERR_TAIL_LENGTH = 4096;
 
 export type TranscodeOptions = {
   signal: AbortSignal;
   onProgress: (progress: number) => void;
+  logger: JobLogger;
 };
 
 export type Transcode = (
@@ -24,17 +26,8 @@ async function readLines(
     rest = lines.pop() ?? "";
     lines.forEach(onLine);
   }
-}
-
-async function readTail(stream: ReadableStream<Uint8Array>) {
-  const decoder = new TextDecoder();
-  let tail = "";
-  for await (const chunk of stream) {
-    tail = (tail + decoder.decode(chunk, { stream: true })).slice(
-      -STDERR_TAIL_LENGTH,
-    );
-  }
-  return tail.trim();
+  rest += decoder.decode();
+  if (rest) onLine(rest);
 }
 
 function parseProgress(line: string, durationSeconds: number) {
@@ -48,32 +41,41 @@ export function createTranscoder(
   ffmpegPath: string,
   accelerators: Accelerators = {},
 ): Transcode {
-  return async (input, { signal, onProgress }) => {
+  return async (input, { signal, onProgress, logger }) => {
     signal.throwIfAborted();
-    const ffmpeg = Bun.spawn(
-      [
-        ffmpegPath,
-        "-nostdin",
-        "-v",
-        "error",
-        "-nostats",
-        "-progress",
-        "pipe:1",
-        ...buildFfmpegArgs(input, accelerators),
-      ],
-      { stdout: "pipe", stderr: "pipe", signal, killSignal: "SIGKILL" },
-    );
-    const [, stderr, code] = await Promise.all([
+    const command = [
+      ffmpegPath,
+      "-nostdin",
+      "-v",
+      "error",
+      "-nostats",
+      "-progress",
+      "pipe:1",
+      ...buildFfmpegArgs(input, accelerators),
+    ];
+    logger.info(command.join(" "));
+    const ffmpeg = Bun.spawn(command, {
+      stdout: "pipe",
+      stderr: "pipe",
+      signal,
+      killSignal: "SIGKILL",
+    });
+    let stderr = "";
+    const [, , code] = await Promise.all([
       readLines(ffmpeg.stdout, (line) => {
         const progress = parseProgress(line, input.mediaInfo.durationSeconds);
         if (progress !== undefined) onProgress(progress);
       }),
-      readTail(ffmpeg.stderr),
+      readLines(ffmpeg.stderr, (line) => {
+        if (!line.trim()) return;
+        stderr = `${stderr}\n${line}`.slice(-STDERR_TAIL_LENGTH);
+        logger.error(line);
+      }),
       ffmpeg.exited,
     ]);
     signal.throwIfAborted();
     if (code !== 0) {
-      throw new Error(`ffmpeg exited with code ${code}: ${stderr}`);
+      throw new Error(`ffmpeg exited with code ${code}: ${stderr.trim()}`);
     }
   };
 }

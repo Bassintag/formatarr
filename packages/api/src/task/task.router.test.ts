@@ -91,7 +91,8 @@ describe("tasks.stream", () => {
   });
 
   test("sends the next job once the current one is finished", async () => {
-    const { asWorker, connect, queue } = await setup();
+    const { call, asWorker, connect, queue } = await setup();
+    await call.settings.update({ jobs: { maxRetries: 0 } });
     const first = queue();
     const second = queue();
     const { stream } = await connect();

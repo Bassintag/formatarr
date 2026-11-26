@@ -11,7 +11,13 @@ import {
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ApiClient, JobId, JobUpdate, Task } from "@formatarr/contract";
+import type {
+  ApiClient,
+  JobId,
+  JobLogCreate,
+  JobUpdate,
+  Task,
+} from "@formatarr/contract";
 import { ORPCError } from "@orpc/client";
 import type { Transcode } from "@/lib/ffmpeg/run";
 import { runJob } from "@/lib/job";
@@ -21,6 +27,7 @@ let workDir: string;
 
 beforeEach(async () => {
   workDir = await mkdtemp(join(tmpdir(), "formatarr-worker-"));
+  spyOn(console, "log").mockImplementation(() => {});
   spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -48,8 +55,9 @@ function setup() {
   const update = mock(async (_: JobUpdate) => {});
   const source = mock(async () => new Blob(["source"]).stream());
   const result = mock(async () => {});
+  const createLog = mock(async (_: JobLogCreate) => {});
   const client = {
-    jobs: { update, source, result },
+    jobs: { update, source, result, createLog },
   } as unknown as ApiClient;
   const transcoding = Promise.withResolvers<void>();
   const transcode = mock<Transcode>(async ({ outputPath }, { signal }) => {
@@ -68,7 +76,16 @@ function setup() {
     const [, options] = transcode.mock.calls[0] as Parameters<Transcode>;
     return { done, options };
   };
-  return { start, update, result, transcode, transcoding, connection, client };
+  return {
+    start,
+    update,
+    result,
+    createLog,
+    transcode,
+    transcoding,
+    connection,
+    client,
+  };
 }
 
 function updates(update: ReturnType<typeof setup>["update"]) {
@@ -163,6 +180,27 @@ describe("runJob", () => {
       { id, progress: 30, status: "failed", error: "boom" },
     ]);
     expect(await readdir(workDir)).toEqual([]);
+  });
+
+  test("sends the pending logs before reporting a failure", async () => {
+    const { start, update, createLog, transcoding } = setup();
+    const posting = Promise.withResolvers<void>();
+    createLog.mockImplementation(() => posting.promise);
+    const { done, options } = await start();
+
+    options.logger.error("broken frame");
+    transcoding.reject(new Error("boom"));
+    await advance(0);
+
+    expect(update).not.toHaveBeenCalled();
+
+    posting.resolve();
+    await done;
+
+    expect(
+      createLog.mock.calls.map(([input]) => input.message).join("\n"),
+    ).toBe("Downloading source\nbroken frame");
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   test("retries the failure report until it goes through", async () => {

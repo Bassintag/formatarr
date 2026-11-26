@@ -18,3 +18,11 @@ test("settings.update persists changes", async () => {
   const result = await call.settings.get();
   expect(result.auth.username).toBe("admin");
 });
+
+test("settings.update merges the job settings", async () => {
+  const { call } = createTestCaller();
+  await call.settings.update({ jobs: { maxRetries: 5 } });
+
+  const result = await call.settings.get();
+  expect(result.jobs).toEqual({ maxRetries: 5, timeoutSeconds: 60 });
+});

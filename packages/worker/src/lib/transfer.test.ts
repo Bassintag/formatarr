@@ -35,7 +35,9 @@ function setup({ rules = [] as Partial<Rule>[], size = 6 } = {}) {
     const content = await Bun.file(sourcePath).text();
     await Bun.write(outputPath, `${content} converted`);
   });
+  const logger = { info: mock(), error: mock(), flush: mock(async () => {}) };
   const options: TranscodeOptions = {
+    logger,
     signal: new AbortController().signal,
     onProgress: () => {},
   };

@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { basename } from "node:path";
 import type { AppEvent, WorkerId } from "@formatarr/contract";
 import { eq } from "drizzle-orm";
-import { files, jobs } from "@/db/schema";
+import { files, jobs, workers } from "@/db/schema";
 import {
   cancelJobs,
   claimTask,
   dispatchTasks,
-  requeueJobs,
+  expireJobs,
+  interruptJobs,
 } from "@/task/task.lib";
 import { createTestContext } from "@/testing/harness";
 import {
@@ -34,9 +35,17 @@ function setup() {
     });
     return { file, job: seedJob(db, file.id) };
   };
-  const assign = (workerId: WorkerId, status: "running" | "failed") => {
-    const file = seedFile(db, library.id, { status: "processing" });
-    return { file, job: seedJob(db, file.id, [], { workerId, status }) };
+  const assign = (
+    workerId: WorkerId,
+    status: "running" | "failed",
+    values: Parameters<typeof seedJob>[3] = {},
+  ) => {
+    const file = seedFile(db, library.id, {
+      status: "processing",
+      mediaInfo: sampleMediaInfo,
+    });
+    const job = seedJob(db, file.id, [], { workerId, status, ...values });
+    return { file, job };
   };
   const jobRow = (id: number) =>
     db
@@ -164,13 +173,15 @@ describe("claimTask", () => {
   });
 });
 
-describe("requeueJobs", () => {
+describe("interruptJobs", () => {
+  const interruption = { reason: "boom", maxRetries: 2 };
+
   test("releases every running job without a worker", () => {
     const { db, worker, other, assign, jobRow } = setup();
     const first = assign(worker.id, "running");
     const second = assign(other.id, "running");
 
-    db.transaction((tx) => requeueJobs(tx));
+    db.transaction((tx) => interruptJobs(tx, interruption));
 
     expect(jobRow(first.job.id)?.status).toBe("queued");
     expect(jobRow(second.job.id)?.status).toBe("queued");
@@ -182,9 +193,11 @@ describe("requeueJobs", () => {
     const failed = assign(worker.id, "failed");
     const theirs = assign(other.id, "running");
 
-    const requeued = db.transaction((tx) => requeueJobs(tx, worker.id));
+    const interrupted = db.transaction((tx) =>
+      interruptJobs(tx, { ...interruption, workerId: worker.id }),
+    );
 
-    expect(requeued).toEqual([{ id: mine.job.id, fileId: mine.file.id }]);
+    expect(interrupted).toEqual([{ id: mine.job.id, status: "queued" }]);
     expect(jobRow(mine.job.id)).toMatchObject({
       status: "queued",
       workerId: null,
@@ -192,6 +205,108 @@ describe("requeueJobs", () => {
     expect(fileRow(mine.file.id)?.status).toBe("queued");
     expect(jobRow(failed.job.id)?.status).toBe("failed");
     expect(jobRow(theirs.job.id)?.status).toBe("running");
+  });
+
+  test("fails the job once the retries are exhausted", () => {
+    const { db, worker, assign, jobRow, fileRow } = setup();
+    const { job, file } = assign(worker.id, "running", { attempts: 3 });
+
+    db.transaction((tx) => interruptJobs(tx, interruption));
+
+    expect(jobRow(job.id)).toMatchObject({
+      status: "failed",
+      workerId: worker.id,
+      error: "boom",
+      finishedAt: new Date(),
+    });
+    expect(fileRow(file.id)?.status).toBe("failed");
+  });
+
+  test("limits the retries of a worker that keeps disconnecting", async () => {
+    const { context, worker, queue, connect, jobRow } = setup();
+    const { job } = queue();
+
+    for (const status of ["queued", "queued", "failed"] as const) {
+      connect(worker.id);
+      await dispatchTasks(context);
+      await disconnectWorker(context, worker.id);
+      expect(jobRow(job.id)?.status).toBe(status);
+    }
+  });
+});
+
+describe("expireJobs", () => {
+  const ago = (seconds: number) => new Date(Date.now() - seconds * 1000);
+
+  function setupStalled(lastSeenAt: Date, startedAt = ago(120)) {
+    const state = setup();
+    const { db, worker, assign } = state;
+    db.update(workers)
+      .set({ lastSeenAt })
+      .where(eq(workers.id, worker.id))
+      .run();
+    return {
+      ...state,
+      ...assign(worker.id, "running", { attempts: 1, startedAt }),
+    };
+  }
+
+  test("requeues a silent job and closes its worker", async () => {
+    const { context, worker, other, job, connect, jobRow, published } =
+      setupStalled(ago(61));
+    const frozen = connect(worker.id);
+
+    await expireJobs(context);
+
+    expect(await frozen()).toBe("close");
+    expect(context.workers.isConnected(worker.id)).toBe(false);
+    expect(jobRow(job.id)).toMatchObject({
+      status: "queued",
+      workerId: null,
+    });
+    expect(published).toEqual([
+      { type: "job.status", id: job.id, status: "queued" },
+    ]);
+
+    connect(other.id);
+    await dispatchTasks(context);
+
+    expect(jobRow(job.id)?.workerId).toBe(other.id);
+  });
+
+  test("gives the expired job to another connected worker", async () => {
+    const { context, worker, other, job, connect, jobRow } = setupStalled(
+      ago(61),
+    );
+    connect(worker.id);
+    connect(other.id);
+
+    await expireJobs(context);
+
+    expect(jobRow(job.id)).toMatchObject({
+      status: "running",
+      workerId: other.id,
+    });
+  });
+
+  test.each([
+    ["the worker was seen recently", ago(59), ago(120)],
+    ["the job has just started", ago(120), ago(59)],
+  ])("keeps the job when %s", async (_, lastSeenAt, startedAt) => {
+    const { context, job, jobRow } = setupStalled(lastSeenAt, startedAt);
+
+    await expireJobs(context);
+
+    expect(jobRow(job.id)?.status).toBe("running");
+  });
+
+  test("follows the configured timeout", async () => {
+    const { context, job, jobRow } = setupStalled(ago(61));
+    await context.settings.update({ jobs: { timeoutSeconds: 90 } });
+
+    await expireJobs(context);
+
+    expect(jobRow(job.id)?.status).toBe("running");
   });
 });
 

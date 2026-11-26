@@ -3,7 +3,11 @@ import { userAuth } from "@/auth/auth.middleware";
 import { workers } from "@/db/schema";
 import { firstOrThrow, hasChanges, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { dispatchTasks, publishJobStatus, requeueJobs } from "@/task/task.lib";
+import {
+  dispatchTasks,
+  interruptJobs,
+  publishInterrupted,
+} from "@/task/task.lib";
 import {
   findWorker,
   generateWorkerToken,
@@ -67,8 +71,13 @@ const update = userWorkers.update.handler(async ({ context, input }) => {
 });
 
 const remove = userWorkers.remove.handler(async ({ context, input }) => {
-  const requeued = context.db.transaction((tx) => {
-    const requeued = requeueJobs(tx, input.id);
+  const { maxRetries } = (await context.settings.read()).jobs;
+  const interrupted = context.db.transaction((tx) => {
+    const interrupted = interruptJobs(tx, {
+      workerId: input.id,
+      reason: "Worker removed",
+      maxRetries,
+    });
     firstOrThrow(
       tx
         .delete(workers)
@@ -76,15 +85,11 @@ const remove = userWorkers.remove.handler(async ({ context, input }) => {
         .returning({ id: workers.id })
         .all(),
     );
-    return requeued;
+    return interrupted;
   });
   await context.workers.close(input.id);
-  await publishJobStatus(
-    context.events,
-    requeued.map((job) => job.id),
-    "queued",
-  );
-  if (requeued.length > 0) await dispatchTasks(context);
+  await publishInterrupted(context.events, interrupted);
+  if (interrupted.length > 0) await dispatchTasks(context);
 });
 
 const regenerateToken = userWorkers.regenerateToken.handler(

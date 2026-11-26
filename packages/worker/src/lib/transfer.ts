@@ -19,13 +19,14 @@ export async function processTask(
   options: TranscodeOptions,
 ) {
   const { job, mediaInfo, fileName, size } = task;
-  const { signal } = options;
+  const { signal, logger } = options;
   const dir = join(workDir, `job-${job.id}`);
   const sourcePath = join(dir, `source${extname(fileName)}`);
   const outputPath = join(dir, `output${outputExtension(task)}`);
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
   try {
+    logger.info("Downloading source");
     const source = await client.jobs.source({ id: job.id }, { signal });
     await writeFile(sourcePath, source, { signal });
     if (Bun.file(sourcePath).size !== size) {
@@ -33,6 +34,8 @@ export async function processTask(
     }
     await transcode({ job, mediaInfo, sourcePath, outputPath }, options);
     const output = Bun.file(outputPath);
+    logger.info("Uploading result");
+    await logger.flush();
     return await client.jobs.result(
       {
         params: { id: job.id },

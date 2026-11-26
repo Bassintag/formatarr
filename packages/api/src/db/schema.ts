@@ -124,6 +124,7 @@ export const jobs = sqliteTable(
       .notNull()
       .default("queued"),
     progress: real().notNull().default(0),
+    attempts: integer().notNull().default(0),
     error: text(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
@@ -136,6 +137,22 @@ export const jobs = sqliteTable(
     index("jobs_status_idx").on(t.status),
     index("jobs_worker_idx").on(t.workerId),
   ],
+);
+
+export const jobLogs = sqliteTable(
+  "job_logs",
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    jobId: integer("job_id")
+      .$type<JobId>()
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    message: text().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("job_logs_job_idx").on(t.jobId)],
 );
 
 export const jobRules = sqliteTable(
