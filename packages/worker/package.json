@@ -9,6 +9,7 @@
     "@formatarr/contract": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/openapi": "catalog:",
+    "es-toolkit": "catalog:",
     "zod": "catalog:"
   }
 }
