@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createTestCaller } from "@/testing/harness";
-import { seedFile, seedLibrary } from "@/testing/seed";
+import { seedFile, seedJob, seedLibrary } from "@/testing/seed";
 
 async function subscribed(stream: AsyncIterator<unknown>) {
   const first = stream.next();
@@ -9,44 +9,50 @@ async function subscribed(stream: AsyncIterator<unknown>) {
 }
 
 describe("events.stream", () => {
-  test("emits worker mutations", async () => {
-    const { call } = createTestCaller();
-    const stream = await call.events.stream();
-    const { first } = await subscribed(stream);
-
+  test("emits worker presence and job activity", async () => {
+    const { call, context, db } = createTestCaller();
     const worker = await call.workers.create({
       name: "w",
       capabilities: { ffmpegVersion: "7", hwaccels: [] },
     });
-    await call.workers.update({ id: worker.id, name: "renamed" });
-    await call.workers.remove({ id: worker.id });
+    const request = new Request("http://localhost", {
+      headers: { authorization: `Bearer ${worker.token}` },
+    });
+    const asWorker = createTestCaller({ ...context, request }).call;
+    const library = seedLibrary(db);
+    const file = seedFile(db, library.id, { status: "queued" });
+    const job = seedJob(db, file.id);
+    const stream = await call.events.stream();
+    const { first } = await subscribed(stream);
+    const events: unknown[] = [];
+    const receive = async (count: number) => {
+      for (let i = 0; i < count; i++) {
+        events.push((await stream.next()).value);
+      }
+    };
 
-    const events = [(await first).value];
-    for (let i = 0; i < 2; i++) events.push((await stream.next()).value);
+    const tasks = await asWorker.tasks.stream();
+    await tasks.next();
+    events.push((await first).value);
+    await receive(1);
+    await asWorker.jobs.update({ id: job.id, progress: 40 });
+    await asWorker.jobs.update({
+      id: job.id,
+      progress: 100,
+      status: "succeeded",
+    });
+    await receive(2);
+    await tasks.return?.();
+    await receive(1);
     await stream.return?.();
 
     expect(events).toEqual([
-      { resource: "worker", change: "created", id: worker.id },
-      { resource: "worker", change: "updated", id: worker.id },
-      { resource: "worker", change: "deleted", id: worker.id },
+      { type: "worker.connected", id: worker.id },
+      { type: "job.status", id: job.id, status: "running" },
+      { type: "job.progress", id: job.id, progress: 40 },
+      { type: "job.status", id: job.id, status: "succeeded" },
+      { type: "worker.disconnected", id: worker.id },
     ]);
-  });
-
-  test("emits file updates", async () => {
-    const { call, db } = createTestCaller();
-    const library = seedLibrary(db);
-    const file = seedFile(db, library.id);
-    const stream = await call.events.stream();
-    const { first } = await subscribed(stream);
-
-    await call.files.update({ id: file.id, ignored: true });
-
-    expect((await first).value).toEqual({
-      resource: "file",
-      change: "updated",
-      id: file.id,
-    });
-    await stream.return?.();
   });
 
   test("rejects anonymous callers", () => {

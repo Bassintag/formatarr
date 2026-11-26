@@ -13,7 +13,7 @@ import { files, jobRules, jobs, rules as rulesTable } from "@/db/schema";
 import { jobOptions } from "@/job/job.options";
 import { orThrow, type Tx } from "@/lib/db";
 import { findUnmetRules } from "@/rules/rule.lib";
-import { dispatchTasks } from "@/task/task.lib";
+import { dispatchTasks, publishJobStatus } from "@/task/task.lib";
 
 export const JOB_CHUNK_SIZE = 500;
 
@@ -38,7 +38,6 @@ export async function createJobsForFiles(
 ) {
   const { db, events } = context;
   const createdJobs: JobId[] = [];
-  const updatedFiles: FileId[] = [];
   const rulesByLibrary = new Map<LibraryId, (RuleValue & { id: RuleId })[]>();
 
   db.transaction((tx) => {
@@ -86,7 +85,6 @@ export async function createJobsForFiles(
             .set({ status: "done" })
             .where(eq(files.id, file.id))
             .run();
-          updatedFiles.push(file.id);
           continue;
         }
         const job = tx
@@ -102,17 +100,11 @@ export async function createJobsForFiles(
           .where(eq(files.id, file.id))
           .run();
         createdJobs.push(job.id);
-        updatedFiles.push(file.id);
       }
     }
   });
 
-  for (const id of createdJobs) {
-    await events.publish("event", { resource: "job", change: "created", id });
-  }
-  for (const id of updatedFiles) {
-    await events.publish("event", { resource: "file", change: "updated", id });
-  }
+  await publishJobStatus(events, createdJobs, "queued");
   if (createdJobs.length > 0) await dispatchTasks(context);
 
   return createdJobs.length;
@@ -122,9 +114,7 @@ export async function reevaluateLibrary(
   context: Pick<Context, "db" | "events" | "logger" | "workers">,
   libraryId: LibraryId,
 ) {
-  const { db, events } = context;
-
-  const { ids, reset } = db.transaction((tx) => {
+  const ids = context.db.transaction((tx) => {
     const candidates = tx
       .select({ id: files.id, status: files.status })
       .from(files)
@@ -139,12 +129,8 @@ export async function reevaluateLibrary(
         .where(inArray(files.id, reset.slice(start, start + JOB_CHUNK_SIZE)))
         .run();
     }
-    return { ids: candidates.map((file) => file.id), reset };
+    return candidates.map((file) => file.id);
   });
-
-  for (const id of reset) {
-    await events.publish("event", { resource: "file", change: "updated", id });
-  }
 
   return createJobsForFiles(context, ids);
 }

@@ -63,11 +63,6 @@ const remove = orpc.jobs
         .returning({ id: jobs.id })
         .all(),
     );
-    await context.events.publish("event", {
-      resource: "job",
-      change: "deleted",
-      id: input.id,
-    });
     await dispatchTasks(context);
   });
 

@@ -60,11 +60,6 @@ const update = userFiles.update.handler(async ({ context, input }) => {
       .returning({ id: files.id })
       .all(),
   );
-  await context.events.publish("event", {
-    resource: "file",
-    change: "updated",
-    id,
-  });
   if (!ignored) await dispatchTasks(context);
   return orThrow(
     context.db.query.files.findFirst({ ...fileOptions, where: { id } }).sync(),

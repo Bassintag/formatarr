@@ -11,7 +11,7 @@ import { files } from "@/db/schema";
 
 export type ProbeRunner = (path: string) => Promise<unknown>;
 
-type ProbeContext = Pick<Context, "db" | "events" | "logger" | "env" | "probe">;
+type ProbeContext = Pick<Context, "db" | "logger" | "env" | "probe">;
 
 const RawStreamSchema = z.object({
   codec_type: z.string().optional(),
@@ -100,7 +100,7 @@ export function normalizeProbe(raw: unknown): MediaInfo {
 }
 
 export async function probeFiles(context: ProbeContext, ids: FileId[]) {
-  const { db, events, logger, env, probe } = context;
+  const { db, logger, env, probe } = context;
   const semaphore = new Semaphore(env.PROBE_CONCURRENCY);
 
   const probeOne = async (row: { id: FileId; path: string }) => {
@@ -117,11 +117,6 @@ export async function probeFiles(context: ProbeContext, ids: FileId[]) {
     } finally {
       semaphore.release();
     }
-    await events.publish("event", {
-      resource: "file",
-      change: "updated",
-      id: row.id,
-    });
   };
 
   for (let start = 0; start < ids.length; start += PROBE_CHUNK_SIZE) {

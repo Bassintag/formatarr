@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import type { Context } from "@/context";
 import { workers } from "@/db/schema";
 import { orThrow, type Tx } from "@/lib/db";
-import { dispatchTasks, publishJobUpdates, requeueJobs } from "@/task/task.lib";
+import { dispatchTasks, publishJobStatus, requeueJobs } from "@/task/task.lib";
 import { workerOptions } from "@/worker/worker.options";
 
 const TOKEN_PREFIX = "fmw_";
@@ -57,11 +57,7 @@ export async function connectWorker(
   const messages = context.workers.connect(id, signal);
   if (!messages) throw new ORPCError("CONFLICT");
   touchWorker(context.db, id);
-  await context.events.publish("event", {
-    resource: "worker",
-    change: "updated",
-    id,
-  });
+  await context.events.publish("event", { type: "worker.connected", id });
   return messages;
 }
 
@@ -71,11 +67,11 @@ export async function disconnectWorker(context: WorkerContext, id: WorkerId) {
     touchWorker(tx, id);
     return requeueJobs(tx, id);
   });
-  await publishJobUpdates(context.events, requeued);
-  await context.events.publish("event", {
-    resource: "worker",
-    change: "updated",
-    id,
-  });
+  await publishJobStatus(
+    context.events,
+    requeued.map((job) => job.id),
+    "queued",
+  );
+  await context.events.publish("event", { type: "worker.disconnected", id });
   await dispatchTasks(context);
 }

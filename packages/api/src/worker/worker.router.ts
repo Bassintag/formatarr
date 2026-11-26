@@ -3,7 +3,7 @@ import { userAuth } from "@/auth/auth.middleware";
 import { workers } from "@/db/schema";
 import { firstOrThrow, hasChanges, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
-import { dispatchTasks, publishJobUpdates, requeueJobs } from "@/task/task.lib";
+import { dispatchTasks, publishJobStatus, requeueJobs } from "@/task/task.lib";
 import {
   findWorker,
   generateWorkerToken,
@@ -31,7 +31,7 @@ const list = userWorkers.list.handler(({ context, input }) => {
   };
 });
 
-const create = userWorkers.create.handler(async ({ context, input }) => {
+const create = userWorkers.create.handler(({ context, input }) => {
   const token = generateWorkerToken();
   const created = firstOrThrow(
     context.db
@@ -44,13 +44,7 @@ const create = userWorkers.create.handler(async ({ context, input }) => {
       .returning({ id: workers.id })
       .all(),
   );
-  const worker = findWorker(context, created.id);
-  await context.events.publish("event", {
-    resource: "worker",
-    change: "created",
-    id: worker.id,
-  });
-  return { ...worker, token };
+  return { ...findWorker(context, created.id), token };
 });
 
 const get = userWorkers.get.handler(({ context, input }) => {
@@ -68,11 +62,6 @@ const update = userWorkers.update.handler(async ({ context, input }) => {
         .returning({ id: workers.id })
         .all(),
     );
-    await context.events.publish("event", {
-      resource: "worker",
-      change: "updated",
-      id,
-    });
     if (changes.enabled === false) await context.workers.close(id);
   }
   return findWorker(context, id);
@@ -91,12 +80,11 @@ const remove = userWorkers.remove.handler(async ({ context, input }) => {
     return requeued;
   });
   await context.workers.close(input.id);
-  await publishJobUpdates(context.events, requeued);
-  await context.events.publish("event", {
-    resource: "worker",
-    change: "deleted",
-    id: input.id,
-  });
+  await publishJobStatus(
+    context.events,
+    requeued.map((job) => job.id),
+    "queued",
+  );
   if (requeued.length > 0) await dispatchTasks(context);
 });
 
@@ -112,11 +100,6 @@ const regenerateToken = userWorkers.regenerateToken.handler(
         .all(),
     );
     await context.workers.close(input.id);
-    await context.events.publish("event", {
-      resource: "worker",
-      change: "updated",
-      id: input.id,
-    });
     return { token };
   },
 );

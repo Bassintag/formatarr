@@ -1,26 +1,27 @@
 import { eventIterator } from "@orpc/contract";
 import { z } from "zod";
-import { FileIdSchema, JobIdSchema, WorkerIdSchema } from "./ids";
+import { JobIdSchema, WorkerIdSchema } from "./ids";
+import { JobSchema, JobStatusSchema } from "./job.contract";
 import { orpc } from "./orpc";
 
-export const EventChangeSchema = z.enum(["created", "updated", "deleted"]);
-export type EventChange = z.infer<typeof EventChangeSchema>;
-
-export const AppEventSchema = z.discriminatedUnion("resource", [
+export const AppEventSchema = z.discriminatedUnion("type", [
   z.object({
-    resource: z.literal("job"),
-    change: EventChangeSchema,
-    id: JobIdSchema,
-  }),
-  z.object({
-    resource: z.literal("file"),
-    change: EventChangeSchema,
-    id: FileIdSchema,
-  }),
-  z.object({
-    resource: z.literal("worker"),
-    change: EventChangeSchema,
+    type: z.literal("worker.connected"),
     id: WorkerIdSchema,
+  }),
+  z.object({
+    type: z.literal("worker.disconnected"),
+    id: WorkerIdSchema,
+  }),
+  z.object({
+    type: z.literal("job.status"),
+    id: JobIdSchema,
+    status: JobStatusSchema,
+  }),
+  z.object({
+    type: z.literal("job.progress"),
+    id: JobIdSchema,
+    progress: JobSchema.shape.progress,
   }),
 ]);
 export type AppEvent = z.infer<typeof AppEventSchema>;
