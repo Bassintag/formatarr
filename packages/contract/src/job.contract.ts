@@ -45,10 +45,17 @@ export type JobCreate = z.infer<typeof JobCreateSchema>;
 export const JobUpdateSchema = z.object({
   id: JobIdSchema,
   progress: z.number().min(0).max(100),
-  status: JobStatusSchema.extract(["succeeded", "failed"]).optional(),
+  status: JobStatusSchema.extract(["failed"]).optional(),
   error: z.string().optional(),
 });
 export type JobUpdate = z.infer<typeof JobUpdateSchema>;
+
+export const JobResultSchema = z.object({
+  params: IdParamsSchema(JobIdSchema),
+  query: z.object({ size: z.coerce.number().int().nonnegative() }),
+  body: z.instanceof(ReadableStream<Uint8Array>),
+});
+export type JobResult = z.infer<typeof JobResultSchema>;
 
 export const jobsContract = orpc
   .route({ prefix: "/jobs", tags: ["jobs"] })
@@ -69,6 +76,25 @@ export const jobsContract = orpc
       .meta(workerMeta)
       .route({ method: "PATCH", path: "/{id}" })
       .input(JobUpdateSchema)
+      .output(JobSchema),
+    source: orpc
+      .meta(workerMeta)
+      .route({
+        method: "GET",
+        path: "/{id}/source",
+        responseBodyHint: "octet-stream",
+      })
+      .input(IdParamsSchema(JobIdSchema))
+      .output(z.instanceof(ReadableStream<Uint8Array>)),
+    result: orpc
+      .meta(workerMeta)
+      .route({
+        method: "PUT",
+        path: "/{id}/result",
+        inputStructure: "detailed",
+        requestBodyHint: "octet-stream",
+      })
+      .input(JobResultSchema)
       .output(JobSchema),
     remove: orpc
       .route({ method: "DELETE", path: "/{id}" })

@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { basename } from "node:path";
 import type { AppEvent, WorkerId } from "@formatarr/contract";
 import { eq } from "drizzle-orm";
 import { files, jobs } from "@/db/schema";
-import { claimTask, dispatchTasks, requeueJobs } from "@/task/task.lib";
+import {
+  cancelJobs,
+  claimTask,
+  dispatchTasks,
+  requeueJobs,
+} from "@/task/task.lib";
 import { createTestContext } from "@/testing/harness";
 import {
+  sampleMediaInfo,
   seedFile,
   seedJob,
   seedLibrary,
@@ -20,7 +27,11 @@ function setup() {
   const worker = seedWorker(db);
   const other = seedWorker(db, { tokenHash: "other" });
   const queue = (values: Parameters<typeof seedFile>[2] = {}) => {
-    const file = seedFile(db, library.id, { status: "queued", ...values });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+      ...values,
+    });
     return { file, job: seedJob(db, file.id) };
   };
   const assign = (workerId: WorkerId, status: "running" | "failed") => {
@@ -72,14 +83,17 @@ describe("claimTask", () => {
   test("assigns the oldest queued job to the worker", () => {
     const { context, db, library, worker, queue, fileRow } = setup();
     const rule = seedRule(db, library.id);
-    const file = seedFile(db, library.id, { status: "queued" });
+    const file = seedFile(db, library.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+    });
     const first = seedJob(db, file.id, [rule.id]);
     queue();
 
     const task = claimTask(context.db, worker.id);
 
     expect(task).toMatchObject({
-      sourcePath: file.path,
+      fileName: basename(file.path),
       job: {
         id: first.id,
         status: "running",
@@ -89,6 +103,28 @@ describe("claimTask", () => {
       },
     });
     expect(fileRow(file.id)?.status).toBe("processing");
+  });
+
+  test("describes the source file without exposing its path", () => {
+    const { context, worker, queue } = setup();
+    queue({ path: "/media/Movie (2020).mkv", size: 42 });
+
+    const task = claimTask(context.db, worker.id);
+
+    expect(task).toEqual({
+      job: expect.anything(),
+      fileName: "Movie (2020).mkv",
+      size: 42,
+      mediaInfo: sampleMediaInfo,
+    });
+  });
+
+  test("leaves queued the jobs of files without media info", () => {
+    const { context, worker, queue, jobRow } = setup();
+    const { job } = queue({ mediaInfo: null });
+
+    expect(claimTask(context.db, worker.id)).toBeUndefined();
+    expect(jobRow(job.id)?.status).toBe("queued");
   });
 
   test("returns nothing when the queue is empty", () => {
@@ -118,7 +154,11 @@ describe("claimTask", () => {
     const { context, db, worker, queue } = setup();
     queue({ ignored: true });
     const disabled = seedLibrary(db, { enabled: false });
-    seedJob(db, seedFile(db, disabled.id, { status: "queued" }).id);
+    const hidden = seedFile(db, disabled.id, {
+      status: "queued",
+      mediaInfo: sampleMediaInfo,
+    });
+    seedJob(db, hidden.id);
 
     expect(claimTask(context.db, worker.id)).toBeUndefined();
   });
@@ -246,5 +286,27 @@ describe("dispatchTasks", () => {
     await dispatchTasks(context);
 
     expect(jobRow(job.id)?.status).toBe("queued");
+  });
+});
+
+describe("cancelJobs", () => {
+  test("cancels the active jobs of the given files only", () => {
+    const { db, worker, queue, assign, jobRow } = setup();
+    const queued = queue();
+    const running = assign(worker.id, "running");
+    const failed = assign(worker.id, "failed");
+    const untouched = queue();
+
+    const cancelled = db.transaction((tx) =>
+      cancelJobs(tx, [queued.file.id, running.file.id, failed.file.id]),
+    );
+
+    expect(cancelled).toEqual([queued.job.id, running.job.id]);
+    expect(jobRow(running.job.id)).toMatchObject({
+      status: "cancelled",
+      finishedAt: new Date(),
+    });
+    expect(jobRow(failed.job.id)?.status).toBe("failed");
+    expect(jobRow(untouched.job.id)?.status).toBe("queued");
   });
 });

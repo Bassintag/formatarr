@@ -14,12 +14,13 @@
     "@orpc/publisher": "catalog:",
     "@orpc/server": "catalog:",
     "drizzle-orm": "1.0.0-rc.6",
-    "es-toolkit": "^1.53.2",
+    "es-toolkit": "catalog:",
     "jose": "^6.2.18",
     "pino": "^10.4.0",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@orpc/client": "catalog:",
     "drizzle-kit": "1.0.0-rc.6",
     "pino-pretty": "^13.2.0"
   }

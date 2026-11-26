@@ -5,6 +5,7 @@ import { userAuth, workerAuth } from "@/auth/auth.middleware";
 import { jobs } from "@/db/schema";
 import { getJob } from "@/job/job.lib";
 import { jobOptions } from "@/job/job.options";
+import { openSource, receiveResult } from "@/job/transfer.lib";
 import { buildWhere, firstOrThrow, paginationOption, toPage } from "@/lib/db";
 import { orpc } from "@/lib/orpc";
 import { dispatchTasks, updateJob } from "@/task/task.lib";
@@ -53,6 +54,22 @@ const update = orpc.jobs
     return updateJob(context, context.worker.id, input);
   });
 
+const source = orpc.jobs
+  .use(workerAuth)
+  .source.handler(({ context, input }) => {
+    return openSource(context, context.worker.id, input.id);
+  });
+
+const result = orpc.jobs
+  .use(workerAuth)
+  .result.handler(({ context, input }) => {
+    return receiveResult(context, context.worker.id, {
+      id: input.params.id,
+      size: input.query.size,
+      body: input.body,
+    });
+  });
+
 const remove = orpc.jobs
   .use(userAuth)
   .remove.handler(async ({ context, input }) => {
@@ -71,5 +88,7 @@ export const jobsRouter = orpc.jobs.router({
   create,
   get,
   update,
+  source,
+  result,
   remove,
 });

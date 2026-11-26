@@ -16,10 +16,10 @@ import { mockFileSystem } from "@/testing/memory-fs";
 import { seedFile, seedLibrary, seedRule } from "@/testing/seed";
 
 const mediaInfo: MediaInfo = {
-  container: "matroska",
+  container: "mkv",
   durationSeconds: 100,
   bitrate: 5000,
-  video: { codec: "h264", width: 1920, height: 1080 },
+  video: { codec: "h264", width: 1920, height: 1080, bitrate: 4500 },
   audio: [
     { codec: "aac", language: "eng", channels: 2 },
     { codec: "ac3", language: null, channels: 6 },
@@ -98,7 +98,7 @@ describe("createJobsForFiles", () => {
   test("one job carries every unmet rule and skips satisfied and disabled ones", async () => {
     const { context, addRule, addFile, allJobs, jobRuleIds } =
       await setupJobs();
-    await addRule({ type: "container", value: "matroska" });
+    await addRule({ type: "container", value: "mkv" });
     const codec = await addRule({ type: "videoCodec", value: "hevc" });
     const bitrate = await addRule({ type: "maxBitrate", value: 1000 });
     await addRule({ type: "maxResolution", value: 480 }, { enabled: false });
@@ -112,8 +112,8 @@ describe("createJobsForFiles", () => {
   test("marks the file done without a job when every rule is satisfied", async () => {
     const { context, addRule, addFile, allJobs, fileStatus } =
       await setupJobs();
-    await addRule({ type: "container", value: "matroska" });
-    await addRule({ type: "audioLanguages", value: ["eng"] });
+    await addRule({ type: "container", value: "mkv" });
+    await addRule({ type: "subtitleLanguages", value: ["eng"] });
     const f = await addFile("a.mkv");
     expect(await createJobsForFiles(context, [f.id])).toBe(0);
     expect(allJobs()).toHaveLength(0);

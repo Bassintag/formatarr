@@ -8,8 +8,6 @@ export const workerOptions = {
     id: true,
     name: true,
     enabled: true,
-    capabilities: true,
-    pathMappings: true,
     lastSeenAt: true,
   },
   with: {

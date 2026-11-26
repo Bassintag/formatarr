@@ -13,7 +13,9 @@ test("health and auth entry points are public", () => {
   expect(getAuthMeta(contract.auth.refresh)?.kind).toBeNull();
 });
 
-test("task stream and job updates authenticate with a worker token", () => {
+test("worker routes authenticate with a worker token", () => {
   expect(getAuthMeta(contract.tasks.stream)?.kind).toBe("worker");
   expect(getAuthMeta(contract.jobs.update)?.kind).toBe("worker");
+  expect(getAuthMeta(contract.jobs.source)?.kind).toBe("worker");
+  expect(getAuthMeta(contract.jobs.result)?.kind).toBe("worker");
 });

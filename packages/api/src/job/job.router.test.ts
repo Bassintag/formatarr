@@ -166,38 +166,20 @@ describe("jobs.update", () => {
     });
   });
 
-  test("success completes the job and the file", async () => {
+  test("failure completes the job and the file", async () => {
     const { call, file, job, owner } = setupRunning();
-
     const updated = await owner.call.jobs.update({
       id: job.id,
-      progress: 100,
-      status: "succeeded",
+      progress: 40,
+      status: "failed",
+      error: "boom",
     });
 
     expect(updated).toMatchObject({
-      status: "succeeded",
-      progress: 100,
+      status: "failed",
+      progress: 40,
+      error: "boom",
       finishedAt: new Date(),
-    });
-    expect(await call.files.get({ id: file.id })).toMatchObject({
-      status: "done",
-    });
-  });
-
-  test("failure records the progress and the error", async () => {
-    const { call, file, job, owner } = setupRunning();
-    const updated = await owner.call.jobs.update({
-      id: job.id,
-      progress: 40,
-      status: "failed",
-      error: "boom",
-    });
-
-    expect(updated).toMatchObject({
-      status: "failed",
-      progress: 40,
-      error: "boom",
     });
     expect(await call.files.get({ id: file.id })).toMatchObject({
       status: "failed",
@@ -218,7 +200,7 @@ describe("jobs.update", () => {
     await owner.call.jobs.update({ ...update, status: "failed" });
 
     expect(
-      owner.call.jobs.update({ ...update, status: "succeeded" }),
+      owner.call.jobs.update({ ...update, status: "failed" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 

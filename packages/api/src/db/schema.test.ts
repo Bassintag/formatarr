@@ -42,7 +42,6 @@ function seed(db: ReturnType<typeof setup>) {
     .values({
       name: "w",
       tokenHash: "h",
-      capabilities: { ffmpegVersion: "7", hwaccels: [] },
     })
     .returning()
     .get();
